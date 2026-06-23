@@ -1,12 +1,8 @@
 import './style.css';
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ---------- asset paths (public/ served at /) ----------
 const BLDG = (n) => encodeURI(`/assets/city/kenney-commercial/Models/GLB format/${n}.glb`);
@@ -54,7 +50,7 @@ const NPC_LINES = [
   { name:'bo',     t:'the arcade literally makes games from a sentence. go press the cabinet.' },
   { name:'nadia',  t:'serious recruiter? there\'s a "read as a page" link, top-right. boring but fast.' },
   { name:'jun',    t:'zeno remembers your festivals, your family, your voice notes. kinda sweet.' },
-  { name:' True',  t:'he found 13 bugs in a YC hackathon backend once. filed them politely. menace.' },
+  { name:'true',   t:'he found 13 bugs in a YC hackathon backend once. filed them politely. menace.' },
   { name:'lena',   t:'keep walking past the edge and the fog just swallows you. cozy, right?' },
 ];
 
@@ -63,42 +59,31 @@ const $ = (id) => document.getElementById(id);
 const loadEl = $('load'), loadbar = $('loadbar');
 const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
-$('quest')?.style && ($('quest').style.display = 'none'); // killed the section-mirroring quest list
+if ($('quest')) $('quest').style.display = 'none';
 
-// ---------- renderer / scene / camera ----------
-const LOW = isTouch; // low-end / mobile: skip bloom + shadows, lower DPR
-const renderer = new THREE.WebGLRenderer({ antialias:!LOW, powerPreference:'high-performance' });
+// ---------- renderer (WebGPU, auto WebGL2 fallback) ----------
+const LOW = isTouch;
+const renderer = new THREE.WebGPURenderer({ antialias: !LOW });
 renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !LOW;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.AgXToneMapping;   // filmic, no glaze
+renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 0.95;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xcfe0d6, 0.006);
-
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 400);
 camera.position.set(0, 8, 18);
 
-// ---------- post (subtle bloom) ----------
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.7, 0.92);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-
 // ---------- lights ----------
-const hemi = new THREE.HemisphereLight(0xffffff, 0x6a705e, 0.7);
-scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x6a705e, 0.7); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2d8, 2.6);
 sun.position.set(38, 56, 22); sun.castShadow = !LOW;
 sun.shadow.mapSize.set(1024, 1024);
 const sc = sun.shadow.camera; sc.left=-70; sc.right=70; sc.top=70; sc.bottom=-70; sc.near=1; sc.far=200;
 sun.shadow.bias = -0.0004; scene.add(sun);
-// brand point-lights — vermillion = "this is sang's"; off by day, on at night
 const lampArcade = new THREE.PointLight(0xFF5B22, 0, 14, 2); lampArcade.position.set(12, 5, 8); scene.add(lampArcade);
 const lampPlaza  = new THREE.PointLight(0xEDE3D2, 0, 16, 2); lampPlaza.position.set(0, 6, 0);   scene.add(lampPlaza);
 
@@ -109,36 +94,33 @@ manager.onLoad = () => setTimeout(() => loadEl.classList.add('gone'), 300);
 const gltfLoader = new GLTFLoader(manager);
 const rgbe = new RGBELoader(manager);
 const texLoader = new THREE.TextureLoader(manager);
-const pmrem = new THREE.PMREMGenerator(renderer);
 
-// ---------- environment (day + night) ----------
-let envDay=null, envNight=null, bgDay=null, bgNight=null, applied=false;
+// ---------- environment (day + night) — equirect direct (WebGPU-friendly, no PMREM) ----------
+let envDay=null, envNight=null, applied=false;
 function loadEnv(name){
   rgbe.load(HDRI(name), (tex) => {
     tex.mapping = THREE.EquirectangularReflectionMapping;
-    const env = pmrem.fromEquirectangular(tex).texture;
-    if (name === 'day') { envDay = env; bgDay = tex; } else { envNight = env; bgNight = tex; }
-    if (envDay && bgDay && !applied) { applied = true; applyEnv(); }
+    if (name === 'day') envDay = tex; else envNight = tex;
+    if (envDay && !applied) { applied = true; applyEnv(); }
   });
 }
-function applyEnv(){ scene.environment = isNight ? envNight : envDay; scene.background = isNight ? bgNight : bgDay; }
+function applyEnv(){ scene.environment = isNight ? envNight : envDay; scene.background = isNight ? envNight : envDay; }
 loadEnv('day'); loadEnv('night');
 
-// ---------- de-glaze: per-role material tuning ----------
+// ---------- de-glaze material tuning ----------
 function tuneMaterial(n){
   if (!n.isMesh || !n.material) return;
-  const m = n.material;
-  const name = (n.name + ' ' + (m.name||'')).toLowerCase();
+  const m = n.material; const name = (n.name + ' ' + (m.name||'')).toLowerCase();
   if (/glass|window/.test(name))            { m.roughness = 0.10; m.metalness = 0.0; m.envMapIntensity = 1.0; }
   else if (/metal|trim|sign|rail/.test(name)){ m.roughness = 0.35; m.metalness = 0.85; m.envMapIntensity = 0.6; }
   else { if (m.roughness !== undefined) m.roughness = Math.max(m.roughness, 0.85); if (m.metalness !== undefined) m.metalness = 0.0; m.envMapIntensity = 0.18; }
 }
-function dressObject(o){ o.traverse(n => { if (n.isMesh){ n.castShadow = true; n.receiveShadow = true; tuneMaterial(n); } }); }
+function dressObject(o){ o.traverse(n => { if (n.isMesh){ n.castShadow = !LOW; n.receiveShadow = !LOW; tuneMaterial(n); } }); }
 
 // ---------- ground + wet stone plaza ----------
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400),
   new THREE.MeshStandardMaterial({ color:0x0F0E0C, roughness:1, metalness:0 }));
-ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = !LOW; scene.add(ground);
 
 const stoneAlbedo = texLoader.load(TEX('Color'));
 const stoneNormal = texLoader.load(TEX('NormalGL'));
@@ -149,10 +131,10 @@ stoneAlbedo.colorSpace = THREE.SRGBColorSpace;
 const plazaMat = new THREE.MeshStandardMaterial({
   map:stoneAlbedo, normalMap:stoneNormal, roughnessMap:stoneRough, aoMap:stoneAO,
   roughness:1.0, metalness:0.0, envMapIntensity:0.22,
-}); // wetness faked via roughness+envMap (cheaper than clearcoat over a full-screen floor)
+});
 const plaza = new THREE.Mesh(new THREE.CircleGeometry(26, 96), plazaMat);
-plaza.rotation.x = -Math.PI/2; plaza.position.y = 0.012; plaza.receiveShadow = true;
-plaza.geometry.setAttribute('uv2', plaza.geometry.attributes.uv); // aoMap needs uv2
+plaza.rotation.x = -Math.PI/2; plaza.position.y = 0.012; plaza.receiveShadow = !LOW;
+plaza.geometry.setAttribute('uv2', plaza.geometry.attributes.uv);
 scene.add(plaza);
 
 // ---------- helpers ----------
@@ -164,7 +146,7 @@ function makeSign(label, css){
   x.fillStyle='#0F0E0C'; x.fillRect(0,0,512,128); x.strokeStyle=css; x.lineWidth=8; x.strokeRect(8,8,496,112);
   x.fillStyle=css; x.font='600 56px "JetBrains Mono", monospace'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label,256,68);
   const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4;
-  const m=new THREE.MeshStandardMaterial({ map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.3, toneMapped:false, roughness:1 });
+  const m=new THREE.MeshStandardMaterial({ map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.4, toneMapped:false, roughness:1 });
   signMats.push(m); return m;
 }
 
@@ -174,7 +156,7 @@ const plots = [];
 [-1.5,-0.5,0.5,1.5].forEach(gx => [-1.5,-0.5,0.5,1.5].forEach(gz => { if (Math.abs(gx)<1 && Math.abs(gz)<1) return; plots.push([gx*22, gz*22]); }));
 plots.sort((a,b) => Math.hypot(a[0],a[1]) - Math.hypot(b[0],b[1]));
 
-const talkables = []; // {kind, ent, x, z, r, beacon?}
+const talkables = [];
 plots.forEach((p, i) => {
   const name = BUILDINGS[i % BUILDINGS.length];
   gltfLoader.load(BLDG(name), (g) => {
@@ -203,13 +185,12 @@ const CHAR_H = 1.7;
 function loadCharacter(file, cb){
   gltfLoader.load(CHAR(file), (g) => {
     const o = g.scene; const h = (bboxOf(o).max.y - bboxOf(o).min.y) || 1; o.scale.setScalar(CHAR_H/h);
-    o.traverse(n => { if (n.isMesh){ n.castShadow = !LOW; } }); // keep frustum culling on (perf)
+    o.traverse(n => { if (n.isMesh) n.castShadow = !LOW; });
     cb(o, g.animations);
   });
 }
 function mixerFor(o, clips){ const mixer=new THREE.AnimationMixer(o); const acts={}; clips.forEach(c=>acts[c.name]=mixer.clipAction(c)); return {mixer,acts}; }
 
-// player
 let player=null, pMixer=null, pActs={}, pAction=null;
 const vel = new THREE.Vector3();
 loadCharacter('character-male-a', (o, clips) => {
@@ -218,7 +199,6 @@ loadCharacter('character-male-a', (o, clips) => {
 });
 function setAnim(name){ const nx=pActs[name]; if(!nx||nx===pAction) return; nx.reset().fadeIn(0.18).play(); pAction?.fadeOut(0.18); pAction=nx; }
 
-// npcs — each with a name + a line, gently wandering, pause when talked to
 const npcs = [];
 const NPC_FILES = ['character-female-a','character-female-b','character-female-c','character-male-b','character-male-c','character-female-d'];
 NPC_FILES.forEach((file, vi) => {
@@ -270,32 +250,34 @@ const dlg=$('dlg'); let openId=null;
 $('dx').onclick=closeDialogue; $('scrim').onclick=closeDialogue;
 function openDialogue(ent){ openId=ent.name; $('dav').style.background=ent.css; $('dnm').textContent=ent.name; $('dtag').textContent=ent.tag;
   const b=$('dbody'); b.innerHTML=''; ent.body.forEach(l=>{ const d=document.createElement('div'); if(l.lead)d.className='lead'; d.innerHTML=l.t; b.appendChild(d); }); dlg.classList.add('show'); }
-function closeDialogue(){ dlg.classList.remove('show'); openId=null; if(nearestNpc) nearestNpc.paused=false; }
-let nearest=null, nearestNpc=null;
+function closeDialogue(){ dlg.classList.remove('show'); openId=null; if(nearest&&nearest.kind==='npc') nearest.npc.paused=false; }
+let nearest=null;
 const hint=$('hint');
-function tryInteract(){ if(nearest && !openId){ openDialogue(nearest.ent); if(nearest.kind==='npc'){ nearestNpc=nearest.npc; nearest.npc.paused=true; } } }
+function tryInteract(){ if(nearest && !openId){ openDialogue(nearest.ent); if(nearest.kind==='npc') nearest.npc.paused=true; } }
 hint.addEventListener('click', tryInteract);
 
 // ---------- day / night ----------
 let isNight=false;
-const dn = { sun:2.6, hemi:0.7, expo:0.95, bloom:0.18, emis:0.3, fog:0.006, wet:0, lamp:0, fogC:new THREE.Color(0xcfe0d6) };
+const dn = { sun:2.6, hemi:0.7, expo:0.95, emis:0.4, fog:0.006, wet:0, lamp:0, fogC:new THREE.Color(0xcfe0d6) };
 const dnT = { ...dn, fogC:new THREE.Color(0xcfe0d6) };
 function nightTargets(on){
-  Object.assign(dnT, on ? { sun:0.12, hemi:0.22, expo:0.55, bloom:0.9, emis:2.6, fog:0.012, wet:1, lamp:3 }
-                        : { sun:2.6, hemi:0.7, expo:0.95, bloom:0.18, emis:0.3, fog:0.006, wet:0, lamp:0 });
+  Object.assign(dnT, on ? { sun:0.12, hemi:0.22, expo:0.55, emis:2.6, fog:0.012, wet:1, lamp:3 }
+                        : { sun:2.6, hemi:0.7, expo:0.95, emis:0.4, fog:0.006, wet:0, lamp:0 });
   dnT.fogC.set(on ? 0x0a0c14 : 0xcfe0d6);
 }
 function toggleDayNight(){ isNight=!isNight; $('daynight').textContent = isNight ? '☾ night' : '☀ day'; nightTargets(isNight); applyEnv(); }
 $('daynight').onclick = toggleDayNight;
 
-// ---------- loop (smooth, frame-rate-independent) ----------
+// ---------- loop ----------
 const clock = new THREE.Clock();
 const tmp = new THREE.Vector3();
 const camPos = new THREE.Vector3(0, 9, 20);
-const sm = (k, dt) => 1 - Math.exp(-k*dt);     // exp smoothing factor
+const sm = (k, dt) => 1 - Math.exp(-k*dt);
+var curW, curH;
+function resize(){ const w=innerWidth||document.documentElement.clientWidth||1280, h=innerHeight||document.documentElement.clientHeight||720; if(w===curW&&h===curH) return; curW=w; curH=h; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h); }
+addEventListener('resize', resize); addEventListener('load', resize); resize();
 
 function update(dt){
-  // ---- desired move (camera-relative) ----
   let ix=0, iz=0;
   if (keys['w']||keys['arrowup']) iz-=1;
   if (keys['s']||keys['arrowdown']) iz+=1;
@@ -311,7 +293,6 @@ function update(dt){
     let mx=fx*(-iz)+rx*ix, mz=fz*(-iz)+rz*ix; const ml=Math.hypot(mx,mz)||1;
     const top=(sprint?7.5:4.2)*mag; desX=mx/ml*top; desZ=mz/ml*top;
   }
-  // ---- momentum (accel toward desired, decel to 0) ----
   const a = sm(desX||desZ ? 9 : 12, dt);
   vel.x += (desX - vel.x)*a; vel.z += (desZ - vel.z)*a;
   const speed = Math.hypot(vel.x, vel.z);
@@ -326,7 +307,7 @@ function update(dt){
   }
   pMixer?.update(dt);
 
-  // ---- npcs: gentle wander + each pauses to "talk" ----
+  const t = clock.elapsedTime;
   for (const n of npcs){
     n.mixer.update(dt);
     if (n.paused){ if(n.cur!=='idle'){ n.acts['idle']?.reset().fadeIn(0.2).play(); n.acts[n.cur]?.fadeOut(0.2); n.cur='idle'; } continue; }
@@ -336,15 +317,13 @@ function update(dt){
     else { d.normalize(); n.obj.position.addScaledVector(d, 1.3*dt); n.obj.rotation.y += (Math.atan2(d.x,d.z)-n.obj.rotation.y)*sm(5,dt); if(n.cur!=='walk'){ n.acts['walk']?.reset().fadeIn(0.2).play(); n.acts['idle']?.fadeOut(0.2); n.cur='walk'; } }
   }
 
-  // ---- camera (smoothed follow) ----
   if (player){
     const ox=Math.sin(camYaw)*Math.cos(camPitch)*camDist, oy=Math.sin(camPitch)*camDist, oz=Math.cos(camYaw)*Math.cos(camPitch)*camDist;
     camPos.lerp(tmp.set(player.position.x+ox, oy+1.5, player.position.z+oz), sm(7,dt));
     camera.position.copy(camPos); camera.lookAt(player.position.x, 1.4, player.position.z);
   }
 
-  // ---- nearest talkable (stations + npcs) ----
-  nearest=null; let nd=4.5; const t=clock.elapsedTime;
+  nearest=null; let nd=4.5;
   for (const k of talkables){
     if (k.kind==='station'){ k.beacon.rotation.y += dt*1.4; k.beacon.position.y = k.baseY + Math.sin(t*2)*0.18; }
     const ex = k.kind==='npc' ? k.npc.obj.position.x : k.x;
@@ -356,48 +335,44 @@ function update(dt){
   if (nearest && !openId){ hint.classList.add('show'); $('hinttxt').textContent='talk to '+nearest.ent.name; $('hintkey').textContent=isTouch?'TAP':'E'; }
   else hint.classList.remove('show');
 
-  // ---- day/night lerp ----
   const k = sm(2.6, dt);
   dn.sun+=(dnT.sun-dn.sun)*k; sun.intensity=dn.sun;
   dn.hemi+=(dnT.hemi-dn.hemi)*k; hemi.intensity=dn.hemi;
   dn.expo+=(dnT.expo-dn.expo)*k; renderer.toneMappingExposure=dn.expo;
-  dn.bloom+=(dnT.bloom-dn.bloom)*k; bloom.strength=dn.bloom;
   dn.emis+=(dnT.emis-dn.emis)*k; signMats.forEach(m=>m.emissiveIntensity=dn.emis);
   dn.fog+=(dnT.fog-dn.fog)*k; scene.fog.density=dn.fog; dn.fogC.lerp(dnT.fogC,k); scene.fog.color.copy(dn.fogC);
   dn.lamp+=(dnT.lamp-dn.lamp)*k; lampArcade.intensity=dn.lamp; lampPlaza.intensity=dn.lamp*0.8;
-  dn.wet+=(dnT.wet-dn.wet)*k;
-  plazaMat.roughness = 1.0 - dn.wet*0.45; plazaMat.envMapIntensity = 0.22 + dn.wet*0.6;
+  dn.wet+=(dnT.wet-dn.wet)*k; plazaMat.roughness=1.0-dn.wet*0.45; plazaMat.envMapIntensity=0.22+dn.wet*0.6;
 }
 
-// adaptive quality — hold ~60fps: first scale render resolution, then drop bloom
-let q_pr = LOW ? 1 : 1.5; const q_floor = LOW ? 0.6 : 0.75, q_cap = LOW ? 1 : 1.5;
-let q_bloom = !LOW, q_fA = 0, q_ft = 0;
-function q_setPR(p){ q_pr = p; renderer.setPixelRatio(p); renderer.setSize(curW||innerWidth, curH||innerHeight); composer.setSize(curW||innerWidth, curH||innerHeight); }
-function render(){ if (q_bloom) composer.render(); else renderer.render(scene, camera); }
+// adaptive resolution — hold ~60fps
+let q_pr = Math.min(devicePixelRatio, LOW ? 1 : 1.5);
+const q_floor = LOW ? 0.6 : 0.75, q_cap = q_pr;
+let q_fA = 0, q_ft = 0;
 function animate(){
-  requestAnimationFrame(animate); if (window.__freeze) return;
+  if (window.__freeze) return;
   resize();
   const dt = Math.min(clock.getDelta(), 0.05); update(dt);
   q_fA++; q_ft += dt;
-  if (q_ft >= 0.6){ const fps = q_fA/q_ft; q_fA = 0; q_ft = 0;
-    if (fps < 48){ if (q_pr > q_floor) q_setPR(Math.max(q_floor, q_pr-0.2)); else if (q_bloom) q_bloom = false; }
-    else if (fps > 58){ if (!q_bloom && !LOW) q_bloom = true; else if (q_pr < q_cap) q_setPR(Math.min(q_cap, q_pr+0.1)); }
+  if (q_ft >= 0.6){ const fps = q_fA/q_ft; q_fA=0; q_ft=0;
+    if (fps < 48 && q_pr > q_floor){ q_pr = Math.max(q_floor, q_pr-0.2); renderer.setPixelRatio(q_pr); renderer.setSize(curW||innerWidth, curH||innerHeight); }
+    else if (fps > 58 && q_pr < q_cap){ q_pr = Math.min(q_cap, q_pr+0.1); renderer.setPixelRatio(q_pr); renderer.setSize(curW||innerWidth, curH||innerHeight); }
   }
-  render();
+  renderer.renderAsync(scene, camera);
 }
-window.__kick = animate; animate();
 
-var curW, curH;
-function resize(){ const w=innerWidth||document.documentElement.clientWidth||1280, h=innerHeight||document.documentElement.clientHeight||720; if(w===curW&&h===curH) return; curW=w; curH=h; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h); composer.setSize(w,h); }
-addEventListener('resize', resize); addEventListener('load', resize); resize();
+renderer.init().then(() => {
+  clock.start();
+  renderer.setAnimationLoop(animate);
+  const be = renderer.backend && renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2';
+  console.log('[sang-town] renderer backend:', be);
+}).catch(e => console.error('[sang-town] renderer init failed', e));
 
 // dev hooks
-window.__dbg = { scene, camera, renderer, get player(){return player;}, get npcs(){return npcs;}, get night(){return isNight;} };
+window.__dbg = { scene, camera, renderer, get player(){return player;}, get npcs(){return npcs;}, get night(){return isNight;}, get backend(){ return renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL2'; } };
 window.__setNight = (on) => { isNight=on; $('daynight').textContent=on?'☾ night':'☀ day'; nightTargets(on);
-  Object.assign(dn, { sun:dnT.sun,hemi:dnT.hemi,expo:dnT.expo,bloom:dnT.bloom,emis:dnT.emis,fog:dnT.fog,wet:dnT.wet,lamp:dnT.lamp }); dn.fogC.copy(dnT.fogC);
-  sun.intensity=dn.sun; hemi.intensity=dn.hemi; renderer.toneMappingExposure=dn.expo; bloom.strength=dn.bloom;
+  Object.assign(dn, { sun:dnT.sun,hemi:dnT.hemi,expo:dnT.expo,emis:dnT.emis,fog:dnT.fog,wet:dnT.wet,lamp:dnT.lamp }); dn.fogC.copy(dnT.fogC);
+  sun.intensity=dn.sun; hemi.intensity=dn.hemi; renderer.toneMappingExposure=dn.expo;
   signMats.forEach(m=>m.emissiveIntensity=dn.emis); scene.fog.density=dn.fog; scene.fog.color.copy(dn.fogC);
   lampArcade.intensity=dn.lamp; lampPlaza.intensity=dn.lamp*0.8;
-  plazaMat.roughness=1.0-dn.wet*0.45; plazaMat.envMapIntensity=0.22+dn.wet*0.6;
-  applyEnv(); render(); };
-console.log('[sang-town] booted (reworked: deglaze + wet-stone + smooth move + talking npcs)');
+  plazaMat.roughness=1.0-dn.wet*0.45; plazaMat.envMapIntensity=0.22+dn.wet*0.6; applyEnv(); };
