@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <title>Sangrish — the town</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="load">
+      <h1>sangrish</h1>
+      <div class="bar"><i id="loadbar"></i></div>
+      <div class="tip" id="loadtip">building the town…</div>
+    </div>
+
+    <div id="brand" class="hud"><b>sang</b><span class="sub">walk · talk · explore</span></div>
+
+    <div id="topright" class="hud">
+      <button id="daynight">☀ day</button>
+      <a id="skip" href="https://main.dh58vix9lizgj.amplifyapp.com/page.html">read as a page →</a>
+    </div>
+
+    <div id="quest" class="hud">
+      <div class="box">
+        <h3>find everyone</h3>
+        <ul id="qlist"></ul>
+      </div>
+    </div>
+
+    <div id="hint" class="hud"><div class="key"><b id="hintkey">E</b><span id="hinttxt">talk</span></div></div>
+
+    <div id="stick"><div class="knob" id="knob"></div></div>
+
+    <div id="dlg">
+      <div class="scrim" id="scrim"></div>
+      <div class="panel">
+        <div class="x" id="dx">close ✕</div>
+        <div class="who"><span class="av" id="dav"></span><span class="nm" id="dnm"></span><span class="tag" id="dtag"></span></div>
+        <div class="body" id="dbody"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

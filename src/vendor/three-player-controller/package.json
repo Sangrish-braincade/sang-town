@@ -1,0 +1,53 @@
+{
+    "name": "three-player-controller",
+    "version": "0.4.8",
+    "description": "Third-person / first-person player controller for three.js (three-mesh-bvh based)",
+    "author": "hh-hang",
+    "license": "MIT",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "dev": "vite",
+        "build": "tsup",
+        "clean": "rimraf dist",
+        "prepare": "npm run build",
+        "build:example": "vite build"
+    },
+    "peerDependencies": {
+        "@dimforge/rapier3d-compat": "^0.12.0",
+        "three": ">=0.180.0",
+        "three-mesh-bvh": ">=0.9.9"
+    },
+    "peerDependenciesMeta": {
+        "@dimforge/rapier3d-compat": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@sparkjsdev/spark": "^2.1.0",
+        "@types/node": "^25.0.6",
+        "@types/three": "^0.184.0",
+        "3d-tiles-renderer": "^0.4.24",
+        "firebase": "^12.14.0",
+        "rimraf": "^6.0.0",
+        "tsup": "^8.0.1",
+        "typescript": "^5.9.3",
+        "vite": "^7.3.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hh-hang/three-player-controller"
+    },
+    "homepage": "https://github.com/hh-hang/three-player-controller"
+}
