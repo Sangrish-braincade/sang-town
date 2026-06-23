@@ -61,6 +61,12 @@ const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in wind
 if (isTouch) document.body.classList.add('touch');
 if ($('quest')) $('quest').style.display = 'none';
 
+// perf overlay (press P) — fps / render resolution / backend, for diagnosing device perf
+const perfEl = document.createElement('div');
+perfEl.style.cssText = 'position:fixed;left:20px;bottom:20px;z-index:40;font:12px/1.5 "JetBrains Mono",monospace;color:#3df58c;background:rgba(15,14,12,.82);padding:7px 11px;border-radius:8px;display:none;pointer-events:none;white-space:pre';
+document.body.appendChild(perfEl);
+let perfShow = false;
+
 // ---------- renderer (WebGPU, auto WebGL2 fallback) ----------
 const LOW = isTouch;
 const renderer = new THREE.WebGPURenderer({ antialias: !LOW });
@@ -227,6 +233,7 @@ addEventListener('keydown', e => {
   if (k==='e') tryInteract();
   if (e.key==='Escape') closeDialogue();
   if (k==='n') toggleDayNight();
+  if (k==='p'){ perfShow=!perfShow; perfEl.style.display=perfShow?'block':'none'; }
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()]=false);
 
@@ -357,6 +364,7 @@ function animate(){
   if (q_ft >= 0.6){ const fps = q_fA/q_ft; q_fA=0; q_ft=0;
     if (fps < 48 && q_pr > q_floor){ q_pr = Math.max(q_floor, q_pr-0.2); renderer.setPixelRatio(q_pr); renderer.setSize(curW||innerWidth, curH||innerHeight); }
     else if (fps > 58 && q_pr < q_cap){ q_pr = Math.min(q_cap, q_pr+0.1); renderer.setPixelRatio(q_pr); renderer.setSize(curW||innerWidth, curH||innerHeight); }
+    if (perfShow){ const c=renderer.domElement; perfEl.textContent = Math.round(fps)+' fps\n'+c.width+'×'+c.height+' px  (dpr '+q_pr.toFixed(2)+')\n'+(renderer.backend&&renderer.backend.isWebGPUBackend?'WebGPU':'WebGL2'); }
   }
   renderer.renderAsync(scene, camera);
 }
