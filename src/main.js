@@ -18,9 +18,9 @@ const STATIONS = [
     { t:'founder · <b>pulstra</b> — i rent the brain out (ai/ml). three clients right now.' },
     { t:'building · <b>zeno</b> — it remembers you so you don\'t have to.' },
     { t:'<span style="color:#1a8f4e">available · uk msc, sep 2026.</span> poke around — the glowing folks are the good stuff.' } ] },
-  { id:'work', name:'the arcade', tag:'aicade', hex:0x39e6e6, css:'#39e6e6', body:[
-    { lead:true, t:'the arcade. it builds games.' },
-    { t:'type a prompt → get a playable game. i led the architecture and grew eng <b>7 → 20</b>.' },
+  { id:'work', name:'aicade', tag:'text → game', hex:0x39e6e6, css:'#39e6e6', body:[
+    { lead:true, t:'aicade — type a prompt, get a playable game.' },
+    { t:'co-founded it; led the architecture and grew eng <b>7 → 20</b>.' },
     { t:'~3,000 games shipped. go poke the cabinet.' } ] },
   { id:'research', name:'the lab', tag:'research', hex:0xc69bff, css:'#c69bff', body:[
     { lead:true, t:'simpler beats clever. it\'s on the board.' },
@@ -43,11 +43,11 @@ const NPC_LINES = [
   { name:'mira',   t:'you new here? walk up to the glowing folks — that\'s where the good stuff is.' },
   { name:'devang', t:'sang built this whole block. typed it into existence, mostly.' },
   { name:'okabe',  t:'the lab guy proved "simpler beats clever." annoying, honestly. he\'s right.' },
-  { name:'priya',  t:'i found a floppy disk behind the arcade. didn\'t even know what it was, lol.' },
+  { name:'priya',  t:'i found a floppy disk behind aicade. didn\'t even know what it was, lol.' },
   { name:'sol',    t:'flip it to night (press N). the stone gets wet and the signs glow. worth it.' },
   { name:'reza',   t:'pulstra? that\'s his consultancy. satoshi, omniactive, visteon. busy man.' },
   { name:'aiko',   t:'try typing "cowsay" somewhere quiet. i\'ve said too much.' },
-  { name:'bo',     t:'the arcade literally makes games from a sentence. go press the cabinet.' },
+  { name:'bo',     t:'aicade literally makes games from a sentence. go press the cabinet.' },
   { name:'nadia',  t:'serious recruiter? there\'s a "read as a page" link, top-right. boring but fast.' },
   { name:'jun',    t:'zeno remembers your festivals, your family, your voice notes. kinda sweet.' },
   { name:'true',   t:'he found 13 bugs in a YC hackathon backend once. filed them politely. menace.' },
@@ -66,6 +66,27 @@ const perfEl = document.createElement('div');
 perfEl.style.cssText = 'position:fixed;left:20px;bottom:20px;z-index:40;font:12px/1.5 "JetBrains Mono",monospace;color:#3df58c;background:rgba(15,14,12,.82);padding:7px 11px;border-radius:8px;display:none;pointer-events:none;white-space:pre';
 document.body.appendChild(perfEl);
 let perfShow = false;
+
+// ---------- detect CPU/software rendering → prompt to enable GPU acceleration ----------
+(function accelCheck(){
+  if (localStorage.getItem('st-accel-dismiss')) return;
+  let gpu = '';
+  try { const cv=document.createElement('canvas'); const gl=cv.getContext('webgl2')||cv.getContext('webgl');
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    gpu = (ext ? (gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'') : '').toLowerCase(); } catch(e){}
+  if (!/swiftshader|software|llvmpipe|basic render|microsoft basic/.test(gpu)) return;
+  const b = document.createElement('div');
+  b.style.cssText='position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;max-width:520px;width:calc(100% - 32px);background:#0F0E0C;color:#EDE3D2;border:1px solid #FF5B22;border-radius:14px;padding:16px 18px;font:13px/1.55 "JetBrains Mono",monospace;box-shadow:0 18px 50px rgba(0,0,0,.5)';
+  b.innerHTML='<div style="font-family:\'Instrument Serif\',serif;font-style:italic;font-size:21px;margin-bottom:6px;color:#FF5B22">⚡ turn on hardware acceleration</div><div>your browser is drawing this on the <b>CPU</b> — it runs many times faster on the GPU. In Chrome:</div><div style="margin:8px 0;color:#fff5a0">Settings → System → “Use graphics acceleration when available” → Relaunch</div>';
+  const row=document.createElement('div'); row.style.cssText='display:flex;gap:10px;margin-top:10px;flex-wrap:wrap';
+  const copy=document.createElement('button'), dis=document.createElement('button');
+  copy.textContent='copy settings link'; dis.textContent='dismiss';
+  [copy,dis].forEach(x=>x.style.cssText='font:12px "JetBrains Mono",monospace;cursor:pointer;border:1px solid rgba(237,227,210,.3);background:rgba(237,227,210,.08);color:#EDE3D2;padding:8px 13px;border-radius:8px');
+  copy.style.borderColor='#FF5B22'; copy.style.color='#FF5B22';
+  copy.onclick=()=>{ try{ navigator.clipboard.writeText('chrome://settings/system'); copy.textContent='copied — paste in a new tab'; }catch(e){ copy.textContent='chrome://settings/system'; } };
+  dis.onclick=()=>{ localStorage.setItem('st-accel-dismiss','1'); b.remove(); };
+  row.appendChild(copy); row.appendChild(dis); b.appendChild(row); document.body.appendChild(b);
+})();
 
 // ---------- renderer (WebGPU, auto WebGL2 fallback) ----------
 const LOW = isTouch;
