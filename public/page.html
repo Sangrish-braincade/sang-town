@@ -1,0 +1,1621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sangrish — Portfolio</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+<style>
+  html, body { margin: 0; padding: 0; background: #0F0E0C; scroll-behavior: smooth; }
+  #root { background: #0F0E0C; }
+  body { font-family: "JetBrains Mono", monospace; -webkit-font-smoothing: antialiased; }
+  ::selection { background: #FF5B22; color: #0F0E0C; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,91,34,.3); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  a { color: inherit; }
+  code { font-family: "JetBrains Mono", monospace; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(61,245,140,.4)} 50%{box-shadow:0 0 0 8px rgba(61,245,140,0)} }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-presets="react">
+// =============================================================
+// HERO TERMINAL — interactive Mac-style terminal (replaces orb)
+// =============================================================
+(function () {
+  const COMMANDS = {
+    help: () => ([
+      { c:'#3df58c', t:'available commands' },
+      { c:'rgba(237,227,210,.85)', t:'  whoami       — who am i' },
+      { c:'rgba(237,227,210,.85)', t:'  skills       — what i ship with' },
+      { c:'rgba(237,227,210,.85)', t:'  papers       — research output' },
+      { c:'rgba(237,227,210,.85)', t:'  now          — what i\'m on this week' },
+      { c:'rgba(237,227,210,.85)', t:'  contact      — say hi' },
+      { c:'rgba(237,227,210,.85)', t:'  clear        — clear screen' },
+      { c:'rgba(237,227,210,.5)',  t:'  ↑/↓ history  · tab autocomplete' },
+    ]),
+    whoami: () => ([
+      { c:'#EDE3D2', t:'sang.' },
+      { c:'rgba(237,227,210,.85)', t:'co-founder & cto · aicade   (text → game, eng 7→20)' },
+      { c:'rgba(237,227,210,.85)', t:'founder · pulstra           (ai/ml consultancy, 3 active)' },
+      { c:'rgba(237,227,210,.85)', t:'building · zeno             (claude desktop companion)' },
+      { c:'#3df58c',               t:'status: available · uk msc sep 2026' },
+    ]),
+    skills: () => ([
+      { c:'#FF5B22', t:'inference & efficient ml' },
+      { c:'rgba(237,227,210,.85)', t:'  GQA · KV-cache eviction · long-context · quantisation' },
+      { c:'#FF5B22', t:'systems' },
+      { c:'rgba(237,227,210,.85)', t:'  pytorch · triton · cuda glue · mcp · flask · azure' },
+      { c:'#FF5B22', t:'product' },
+      { c:'rgba(237,227,210,.85)', t:'  zero→one · hiring · architecture · shipping over benching' },
+    ]),
+    papers: () => ([
+      { c:'#3df58c', t:'[preprint] simpler is better: GQA-aware kv eviction' },
+      { c:'rgba(237,227,210,.7)', t:'  beats H2O at every kv budget · arXiv 2026' },
+      { c:'#3df58c', t:'[published] ship-hull paper · results in engineering · IF 9.20' },
+      { c:'#fff5a0', t:'[in-review] squat biomechanics · with prof davidson' },
+    ]),
+    now: () => ([
+      { c:'#FF5B22', t:'▸ pivoting zeno → claude desktop mcp companion-window' },
+      { c:'#FF5B22', t:'▸ "simpler is better" KV paper → arXiv this week' },
+      { c:'#FF5B22', t:'▸ uk msc applications, sep 2026 entry' },
+      { c:'#FF5B22', t:'▸ pulstra: satoshi · omniactive · visteon' },
+    ]),
+    contact: () => ([
+      { c:'#EDE3D2', t:'sangrish03@gmail.com' },
+      { c:'rgba(237,227,210,.7)', t:'github  · github.com/sangrish-braincade' },
+      { c:'rgba(237,227,210,.7)', t:'x       · @Sangrish03' },
+      { c:'rgba(237,227,210,.7)', t:'linkedin· linkedin.com/in/sangrish' },
+      { c:'#3df58c', t:'opening mail client…' },
+      { c:'__action', t:'mail' },
+    ]),
+    clear: () => ([{ c:'__action', t:'clear' }]),
+    sudo: () => ([{ c:'#FF5B22', t:'permission denied: nice try.' }]),
+    ls: () => ([{ c:'rgba(237,227,210,.85)', t:'about.md  papers/  projects/  workshop/  .secrets' }]),
+  };
+  const SUGGESTIONS = ['whoami','skills','papers','now','contact','help','clear'];
+
+  window.HeroTerminal = function HeroTerminal({ onWorkshop }) {
+    const [history, setHistory] = React.useState([]);
+    const [input, setInput] = React.useState('');
+    const [cmdHistory, setCmdHistory] = React.useState([]);
+    const [histIdx, setHistIdx] = React.useState(-1);
+    const [focused, setFocused] = React.useState(false);
+    const [booted, setBooted] = React.useState(false);
+    const inputRef = React.useRef(null);
+    const scrollRef = React.useRef(null);
+    const bootedOnce = React.useRef(false);
+
+    React.useEffect(() => {
+      if (bootedOnce.current) return;
+      bootedOnce.current = true;
+      const seq = [
+        { c:'rgba(237,227,210,.5)', t:'sang@workshop ── arch linux 6.8 · zsh' },
+        { c:'rgba(237,227,210,.5)', t:'last login: just now · from /' },
+        { c:'#3df58c',               t:'welcome. type \'help\' or click a hint below.' },
+      ];
+      const timers = [];
+      seq.forEach((line, i) => {
+        timers.push(setTimeout(() => {
+          setHistory(h => [...h, { kind:'out', lines:[line] }]);
+        }, 400 + i * 320));
+      });
+      timers.push(setTimeout(() => setBooted(true), 400 + seq.length * 320));
+      return () => timers.forEach(clearTimeout);
+    }, []);
+
+    React.useEffect(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [history]);
+
+    const focus = () => inputRef.current && inputRef.current.focus();
+
+    const run = (raw) => {
+      const cmd = (raw || '').trim().toLowerCase();
+      setHistory(h => [...h, { kind:'in', text: raw }]);
+      if (!cmd) return;
+      setCmdHistory(c => [...c, raw]); setHistIdx(-1);
+      const fn = COMMANDS[cmd] || COMMANDS[cmd.split(' ')[0]];
+      if (!fn) {
+        setHistory(h => [...h, { kind:'out', lines:[
+          { c:'#FF5B22', t:`command not found: ${cmd}` },
+          { c:'rgba(237,227,210,.5)', t:'try: help' },
+        ]}]);
+        return;
+      }
+      const lines = fn();
+      const visible = [];
+      lines.forEach(l => {
+        if (l.c === '__action') {
+          if (l.t === 'clear') setHistory([]);
+          else if (l.t === 'mail') setTimeout(() => { window.location.href = 'mailto:sangrish03@gmail.com'; }, 500);
+        } else { visible.push(l); }
+      });
+      if (visible.length) setHistory(h => [...h, { kind:'out', lines: visible }]);
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); run(input); setInput(''); }
+      else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (cmdHistory.length === 0) return;
+        const ni = histIdx < 0 ? cmdHistory.length - 1 : Math.max(0, histIdx - 1);
+        setHistIdx(ni); setInput(cmdHistory[ni] || '');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (histIdx < 0) return;
+        const ni = histIdx + 1;
+        if (ni >= cmdHistory.length) { setHistIdx(-1); setInput(''); }
+        else { setHistIdx(ni); setInput(cmdHistory[ni]); }
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        const m = SUGGESTIONS.find(s => s.startsWith(input.toLowerCase()));
+        if (m) setInput(m);
+      } else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); setHistory([]);
+      }
+    };
+
+    return (
+      <div onClick={focus} style={{
+        width:'100%', maxWidth:560,
+        background:'rgba(7,6,5,.92)',
+        border: focused ? '1px solid rgba(255,91,34,.35)' : '1px solid rgba(237,227,210,.18)',
+        borderRadius:8, overflow:'hidden',
+        backdropFilter:'blur(8px) saturate(1.1)',
+        boxShadow:'0 40px 90px -30px rgba(0,0,0,.7), 0 0 0 1px rgba(255,91,34,.08), inset 0 1px 0 rgba(237,227,210,.06)',
+        fontFamily:'"JetBrains Mono",monospace',
+        cursor:'text', transition:'box-shadow .3s, border-color .3s',
+      }}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:8,
+          padding:'10px 14px',
+          background:'linear-gradient(180deg, rgba(237,227,210,.06), rgba(237,227,210,.02))',
+          borderBottom:'1px solid rgba(237,227,210,.1)',
+        }}>
+          <span style={{ width:11, height:11, borderRadius:'50%', background:'#FF5B47', boxShadow:'inset 0 0 0 1px rgba(0,0,0,.2)' }} />
+          <span style={{ width:11, height:11, borderRadius:'50%', background:'#FFBD2E', boxShadow:'inset 0 0 0 1px rgba(0,0,0,.2)' }} />
+          <span style={{ width:11, height:11, borderRadius:'50%', background:'#28C940', boxShadow:'inset 0 0 0 1px rgba(0,0,0,.2)' }} />
+          <span style={{ marginLeft:14, fontSize:10.5, letterSpacing:1.8, color:'rgba(237,227,210,.55)' }}>sang@workshop ── ~/intro</span>
+          <span style={{ marginLeft:'auto', fontSize:9, letterSpacing:1.5, color:'rgba(61,245,140,.7)' }}>● live</span>
+        </div>
+        <div ref={scrollRef} style={{
+          padding:'16px 18px 8px',
+          fontSize:12.5, lineHeight:1.7,
+          height:360, overflowY:'auto', scrollBehavior:'smooth',
+        }}>
+          {history.map((h, i) => h.kind === 'in' ? (
+            <div key={i} style={{ color:'rgba(237,227,210,.95)', whiteSpace:'pre' }}>
+              <span style={{ color:'#3df58c', marginRight:8 }}>➜</span>
+              <span style={{ color:'#FF5B22', marginRight:8 }}>~/intro</span>
+              {h.text}
+            </div>
+          ) : (
+            <div key={i} style={{ marginBottom:6 }}>
+              {(h.lines || []).filter(Boolean).map((l, j) => (
+                <div key={j} style={{ color:l.c, whiteSpace:'pre' }}>{l.t}</div>
+              ))}
+            </div>
+          ))}
+          {booted && (
+            <div style={{ display:'flex', alignItems:'baseline', color:'rgba(237,227,210,.95)', whiteSpace:'pre' }}>
+              <span style={{ color:'#3df58c', marginRight:8 }}>➜</span>
+              <span style={{ color:'#FF5B22', marginRight:8 }}>~/intro</span>
+              <span style={{ position:'relative', flex:1 }}>
+                <span>{input}</span>
+                <span style={{
+                  display:'inline-block', width:7, height:13, marginLeft:1,
+                  background:'#EDE3D2', verticalAlign:'-1px',
+                  animation:'blinkH 1.05s steps(2) infinite',
+                }} />
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={onKey}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  style={{
+                    position:'absolute', inset:0, opacity:0,
+                    background:'transparent', border:'none', outline:'none',
+                    color:'transparent', caretColor:'transparent',
+                    fontFamily:'inherit', fontSize:'inherit',
+                  }}
+                />
+              </span>
+            </div>
+          )}
+          <style>{`@keyframes blinkH{50%{opacity:0}}`}</style>
+        </div>
+        <div style={{
+          padding:'10px 14px',
+          borderTop:'1px solid rgba(237,227,210,.08)',
+          display:'flex', gap:6, flexWrap:'wrap',
+          background:'rgba(237,227,210,.02)',
+        }}>
+          {['whoami','skills','papers','now'].map(c => (
+            <button key={c}
+              onClick={(e) => { e.stopPropagation(); run(c); focus(); }}
+              style={{
+                background:'transparent',
+                border:'1px solid rgba(237,227,210,.14)',
+                color:'rgba(237,227,210,.7)',
+                fontFamily:'inherit', fontSize:10, letterSpacing:1.2,
+                padding:'4px 9px', cursor:'pointer',
+                borderRadius:3, transition:'all .15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor='#FF5B22'; e.currentTarget.style.color='#FF5B22'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor='rgba(237,227,210,.14)'; e.currentTarget.style.color='rgba(237,227,210,.7)'; }}
+            >{c}</button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+})();
+
+// =============================================================
+// (legacy HeroOrb removed — its orbiting tag labels overlapped hero text)
+// =============================================================
+(function() { /* placeholder block kept for symmetry; HeroOrb retired. */
+  window.HeroOrb_LEGACY = function HeroOrb({ size = 480, tags = ['ZENO','AICADE','PULSTRA','ZAQEN'] }) {
+    const mountRef = React.useRef(null);
+    const stateRef = React.useRef({ mx: 0, my: 0 });
+
+    React.useEffect(() => {
+      let alive = true; let raf = 0; let cleanup = () => {};
+      loadThree().then((THREE) => {
+        if (!alive || !mountRef.current) return;
+        const mount = mountRef.current;
+        const W = mount.clientWidth, H = mount.clientHeight;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 100);
+        camera.position.set(0, 0, 7);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(W, H);
+        renderer.setClearColor(0x000000, 0);
+        mount.appendChild(renderer.domElement);
+
+        const ICO_R = 1.85;
+        const icoGeom = new THREE.IcosahedronGeometry(ICO_R, 1);
+        const icoEdges = new THREE.EdgesGeometry(icoGeom);
+        const icoLines = new THREE.LineSegments(
+          icoEdges,
+          new THREE.LineBasicMaterial({ color: 0xEDE3D2, transparent: true, opacity: 0.85 })
+        );
+        scene.add(icoLines);
+
+        const icoSolid = new THREE.Mesh(
+          icoGeom,
+          new THREE.MeshBasicMaterial({ color: 0x0F0E0C, transparent: true, opacity: 0.92 })
+        );
+        icoSolid.scale.setScalar(0.985);
+        scene.add(icoSolid);
+
+        const vertGeom = new THREE.BufferGeometry();
+        const positions = icoGeom.attributes.position.array;
+        const uniqueVerts = [];
+        const seen = new Set();
+        for (let i = 0; i < positions.length; i += 3) {
+          const k = `${positions[i].toFixed(3)},${positions[i+1].toFixed(3)},${positions[i+2].toFixed(3)}`;
+          if (!seen.has(k)) { seen.add(k); uniqueVerts.push(positions[i], positions[i+1], positions[i+2]); }
+        }
+        vertGeom.setAttribute('position', new THREE.Float32BufferAttribute(uniqueVerts, 3));
+        const vertDots = new THREE.Points(
+          vertGeom,
+          new THREE.PointsMaterial({ color: 0xFF5B22, size: 0.09, transparent: true, opacity: 0.95 })
+        );
+        scene.add(vertDots);
+
+        const ringR = 3.0;
+        const ringSegs = 96;
+        const ringPts = [];
+        for (let i = 0; i <= ringSegs; i++) {
+          const a = (i / ringSegs) * Math.PI * 2;
+          ringPts.push(new THREE.Vector3(Math.cos(a) * ringR, 0, Math.sin(a) * ringR));
+        }
+        const ringGeom = new THREE.BufferGeometry().setFromPoints(ringPts);
+        const ring = new THREE.Line(ringGeom, new THREE.LineBasicMaterial({ color: 0xEDE3D2, transparent: true, opacity: 0.18 }));
+        ring.rotation.x = Math.PI * 0.32; ring.rotation.z = -0.18;
+        scene.add(ring);
+
+        const ringR2 = 2.45;
+        const ringPts2 = [];
+        for (let i = 0; i <= ringSegs; i++) {
+          const a = (i / ringSegs) * Math.PI * 2;
+          ringPts2.push(new THREE.Vector3(Math.cos(a) * ringR2, 0, Math.sin(a) * ringR2));
+        }
+        const ring2 = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(ringPts2),
+          new THREE.LineBasicMaterial({ color: 0xFF5B22, transparent: true, opacity: 0.22 })
+        );
+        ring2.rotation.x = Math.PI * 0.24; ring2.rotation.z = 0.42;
+        scene.add(ring2);
+
+        const sats = [];
+        const tagCount = Math.min(tags.length, 4);
+        for (let i = 0; i < tagCount; i++) {
+          const grp = new THREE.Group();
+          const cubeGeom = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+          const cube = new THREE.Mesh(cubeGeom, new THREE.MeshBasicMaterial({ color: 0xFF5B22 }));
+          const cubeWire = new THREE.LineSegments(
+            new THREE.EdgesGeometry(cubeGeom),
+            new THREE.LineBasicMaterial({ color: 0xEDE3D2, transparent: true, opacity: 0.9 })
+          );
+          cube.add(cubeWire);
+          grp.add(cube);
+          scene.add(grp);
+          sats.push({ grp, phase: (i / tagCount) * Math.PI * 2, ringTilt: i % 2 === 0 ? ring : ring2 });
+        }
+
+        const dustCount = 90;
+        const dustPos = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount; i++) {
+          const r = 4 + Math.random() * 2.5;
+          const t = Math.random() * Math.PI * 2;
+          const p = (Math.random() - 0.5) * Math.PI;
+          dustPos[i*3]   = Math.cos(t) * Math.cos(p) * r;
+          dustPos[i*3+1] = Math.sin(p) * r;
+          dustPos[i*3+2] = Math.sin(t) * Math.cos(p) * r;
+        }
+        const dustGeom = new THREE.BufferGeometry();
+        dustGeom.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
+        const dust = new THREE.Points(
+          dustGeom,
+          new THREE.PointsMaterial({ color: 0xEDE3D2, size: 0.025, transparent: true, opacity: 0.4 })
+        );
+        scene.add(dust);
+
+        const labelEls = [];
+        for (let i = 0; i < tagCount; i++) {
+          const el = document.createElement('div');
+          el.textContent = tags[i];
+          el.style.cssText = `
+            position:absolute; pointer-events:none;
+            font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:1.5px;
+            color:#EDE3D2; background:rgba(15,14,12,.78);
+            border:1px solid rgba(255,91,34,.6);
+            padding:3px 7px; transform:translate(-50%,-50%);
+            white-space:nowrap; text-transform:uppercase;
+            backdrop-filter: blur(3px);
+            transition:opacity .3s;
+          `;
+          mount.appendChild(el);
+          labelEls.push(el);
+        }
+
+        const onMove = (e) => {
+          const rect = mount.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          stateRef.current.mx = (e.clientX - cx) / rect.width;
+          stateRef.current.my = (e.clientY - cy) / rect.height;
+        };
+        window.addEventListener('mousemove', onMove);
+
+        const onResize = () => {
+          if (!mount) return;
+          const w = mount.clientWidth, h = mount.clientHeight;
+          camera.aspect = w / h; camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        };
+        window.addEventListener('resize', onResize);
+
+        const v3 = new THREE.Vector3();
+        const start = performance.now();
+
+        const tick = () => {
+          if (!alive) return;
+          const t = (performance.now() - start) / 1000;
+          const { mx, my } = stateRef.current;
+
+          const targetRotY = t * 0.18 + mx * 0.6;
+          const targetRotX = -0.22 + my * 0.35;
+          icoLines.rotation.y += (targetRotY - icoLines.rotation.y) * 0.08;
+          icoLines.rotation.x += (targetRotX - icoLines.rotation.x) * 0.08;
+          icoSolid.rotation.copy(icoLines.rotation);
+          vertDots.rotation.copy(icoLines.rotation);
+
+          ring.rotation.y = -t * 0.12;
+          ring2.rotation.y = t * 0.18;
+
+          sats.forEach((s, i) => {
+            const ringRef = s.ringTilt;
+            const r = i % 2 === 0 ? ringR : ringR2;
+            const a = s.phase + t * (i % 2 === 0 ? 0.45 : -0.55);
+            v3.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+            v3.applyEuler(ringRef.rotation);
+            s.grp.position.copy(v3);
+            s.grp.rotation.x = t * 1.2 + i;
+            s.grp.rotation.y = t * 1.5 + i;
+
+            const screen = v3.clone().project(camera);
+            const x = (screen.x * 0.5 + 0.5) * mount.clientWidth;
+            const y = (-screen.y * 0.5 + 0.5) * mount.clientHeight;
+            const el = labelEls[i];
+            if (el) {
+              el.style.left = x + 'px';
+              el.style.top  = (y - 22) + 'px';
+              el.style.opacity = screen.z < 1 ? '1' : '0.25';
+            }
+          });
+
+          dust.rotation.y = t * 0.04;
+          dust.rotation.x = t * 0.02;
+
+          renderer.render(scene, camera);
+          raf = requestAnimationFrame(tick);
+        };
+        tick();
+
+        cleanup = () => {
+          cancelAnimationFrame(raf);
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('resize', onResize);
+          labelEls.forEach(el => el.remove());
+          renderer.dispose();
+          if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+          icoGeom.dispose(); icoEdges.dispose(); vertGeom.dispose();
+        };
+      });
+
+      return () => { alive = false; cleanup(); };
+    }, []);
+
+    return (
+      <div ref={mountRef} style={{
+        position:'relative', width:'100%', aspectRatio:'1 / 1', maxWidth:size,
+        marginLeft:'auto',
+      }} />
+    );
+  };
+})();
+
+// =============================================================
+// SCROLL SCENE — full-page scroll-driven 3D backdrop
+// =============================================================
+(function() {
+  const THREE_URL = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+  function loadThree() {
+    return new Promise((resolve) => {
+      if (window.THREE) return resolve(window.THREE);
+      const s = document.createElement('script');
+      s.src = THREE_URL;
+      s.onload = () => resolve(window.THREE);
+      document.head.appendChild(s);
+    });
+  }
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const range = (p, a, b) => clamp((p - a) / (b - a));
+  const fade = (p, a, b, c, d) => {
+    if (p < a || p > d) return 0;
+    if (p < b) return range(p, a, b);
+    if (p > c) return 1 - range(p, c, d);
+    return 1;
+  };
+
+  window.ScrollScene = function ScrollScene() {
+    const mountRef = React.useRef(null);
+    const stateRef = React.useRef({ progress: 0, mx: 0, my: 0 });
+    React.useEffect(() => {
+      let alive = true; let raf = 0; let cleanup = () => {};
+      loadThree().then((THREE) => {
+        if (!alive || !mountRef.current) return;
+        const mount = mountRef.current;
+        const W = window.innerWidth, H = window.innerHeight;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(48, W / H, 0.1, 200);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(W, H);
+        renderer.setClearColor(0x000000, 0);
+        mount.appendChild(renderer.domElement);
+        const C = { cream: 0xEDE3D2, ink: 0x0F0E0C, vermillion: 0xFF5B22, green: 0x3df58c };
+
+        // CH0 hero core
+        const heroGroup = new THREE.Group();
+        const icoGeom = new THREE.IcosahedronGeometry(1.6, 1);
+        const icoEdges = new THREE.EdgesGeometry(icoGeom);
+        const icoLines = new THREE.LineSegments(icoEdges, new THREE.LineBasicMaterial({ color: C.cream, transparent: true, opacity: 0.85 }));
+        const icoSolid = new THREE.Mesh(icoGeom, new THREE.MeshBasicMaterial({ color: C.ink, transparent: true, opacity: 0.92 }));
+        icoSolid.scale.setScalar(0.985);
+        heroGroup.add(icoSolid, icoLines);
+        const seen = new Set(); const uniq = [];
+        const arr = icoGeom.attributes.position.array;
+        for (let i = 0; i < arr.length; i += 3) {
+          const k = `${arr[i].toFixed(3)},${arr[i+1].toFixed(3)},${arr[i+2].toFixed(3)}`;
+          if (!seen.has(k)) { seen.add(k); uniq.push(arr[i], arr[i+1], arr[i+2]); }
+        }
+        const vGeom = new THREE.BufferGeometry();
+        vGeom.setAttribute('position', new THREE.Float32BufferAttribute(uniq, 3));
+        const vDots = new THREE.Points(vGeom, new THREE.PointsMaterial({ color: C.vermillion, size: 0.085 }));
+        heroGroup.add(vDots);
+        const ringPts = [];
+        for (let i = 0; i <= 96; i++) {
+          const a = (i / 96) * Math.PI * 2;
+          ringPts.push(new THREE.Vector3(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6));
+        }
+        const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineBasicMaterial({ color: C.vermillion, transparent: true, opacity: 0.3 }));
+        ring.rotation.x = Math.PI * 0.32; ring.rotation.z = -0.18;
+        heroGroup.add(ring);
+        scene.add(heroGroup);
+
+        // CH1 work constellation
+        const constGroup = new THREE.Group();
+        const NODES = [
+          { name:'AICADE',  pos:new THREE.Vector3(-3.2,  1.4,  0.5) },
+          { name:'ZENO',    pos:new THREE.Vector3( 3.0,  0.8, -1.2) },
+          { name:'ZAQEN',   pos:new THREE.Vector3(-1.6, -1.6, -2.2) },
+          { name:'PULSTRA', pos:new THREE.Vector3( 1.8, -1.0,  1.8) },
+        ];
+        const nodeMeshes = [];
+        NODES.forEach((n, i) => {
+          const cubeG = new THREE.BoxGeometry(0.55, 0.55, 0.55);
+          const cube = new THREE.Mesh(cubeG, new THREE.MeshBasicMaterial({ color: C.ink, transparent:true, opacity:0.85 }));
+          const wire = new THREE.LineSegments(new THREE.EdgesGeometry(cubeG), new THREE.LineBasicMaterial({ color: C.cream, transparent:true, opacity:0.95 }));
+          cube.add(wire);
+          cube.position.copy(n.pos);
+          constGroup.add(cube);
+          nodeMeshes.push({ cube, wire });
+        });
+        const edgePts = [];
+        for (let i = 0; i < NODES.length; i++) for (let j = i+1; j < NODES.length; j++) {
+          edgePts.push(NODES[i].pos.clone(), NODES[j].pos.clone());
+        }
+        const edgeLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edgePts), new THREE.LineBasicMaterial({ color: C.vermillion, transparent: true, opacity: 0.18 }));
+        constGroup.add(edgeLines);
+        constGroup.position.set(0, 0, -8);
+        constGroup.visible = false;
+        scene.add(constGroup);
+
+        // CH2 KV-cache grid — pinned to right side of viewport (tall narrow column)
+        const kvGroup = new THREE.Group();
+        const ROWS = 14, COLS = 6, BS = 0.28, GAP = 0.06;
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const evicted = Math.random() < 0.35;
+            const g = new THREE.BoxGeometry(BS, BS, BS * 0.4);
+            const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: evicted ? C.ink : C.cream, transparent: true, opacity: evicted ? 0.25 : 0.9 }));
+            const w = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: evicted ? C.cream : C.vermillion, transparent: true, opacity: evicted ? 0.3 : 0.9 }));
+            m.add(w);
+            m.position.set((c - COLS / 2) * (BS + GAP), (r - ROWS / 2) * (BS + GAP) * 1.3, 0);
+            kvGroup.add(m);
+          }
+        }
+        kvGroup.position.set(2.5, 0, -16);
+        kvGroup.visible = false;
+        scene.add(kvGroup);
+
+        // CH4 timeline rail
+        const railGroup = new THREE.Group();
+        const railLen = 30;
+        const railGeom = new THREE.BoxGeometry(0.08, 0.08, railLen);
+        const rail = new THREE.Mesh(railGeom, new THREE.MeshBasicMaterial({ color: C.vermillion, transparent: true, opacity: 0.9 }));
+        railGroup.add(rail);
+        const YEARS = ['2020','2021','2022','2023','2024','2025','2026'];
+        YEARS.forEach((y, i) => {
+          const z = -railLen / 2 + (i / (YEARS.length - 1)) * railLen;
+          const tickG = new THREE.BoxGeometry(0.04, 0.5, 0.04);
+          const tick = new THREE.Mesh(tickG, new THREE.MeshBasicMaterial({ color: C.cream }));
+          tick.position.set(0, 0, z);
+          railGroup.add(tick);
+        });
+        railGroup.position.set(0, 0, -28);
+        railGroup.visible = false;
+        scene.add(railGroup);
+
+        // CH5 stars
+        const starsCount = 220;
+        const starsPos = new Float32Array(starsCount * 3);
+        for (let i = 0; i < starsCount; i++) {
+          const r = 12 + Math.random() * 8;
+          const t = Math.random() * Math.PI * 2;
+          const p = (Math.random() - 0.3) * Math.PI;
+          starsPos[i*3]   = Math.cos(t) * Math.cos(p) * r;
+          starsPos[i*3+1] = Math.sin(p) * r + 6;
+          starsPos[i*3+2] = Math.sin(t) * Math.cos(p) * r - 36;
+        }
+        const starsG = new THREE.BufferGeometry();
+        starsG.setAttribute('position', new THREE.Float32BufferAttribute(starsPos, 3));
+        const stars = new THREE.Points(starsG, new THREE.PointsMaterial({ color: C.cream, size: 0.07, transparent:true, opacity: 0 }));
+        scene.add(stars);
+
+        // ambient dust
+        const dustCount = 220;
+        const dustPos = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount; i++) {
+          dustPos[i*3]   = (Math.random() - 0.5) * 30;
+          dustPos[i*3+1] = (Math.random() - 0.5) * 20;
+          dustPos[i*3+2] = -Math.random() * 40 + 5;
+        }
+        const dustG = new THREE.BufferGeometry();
+        dustG.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
+        const dust = new THREE.Points(dustG, new THREE.PointsMaterial({ color: C.cream, size: 0.025, transparent: true, opacity: 0.35 }));
+        scene.add(dust);
+
+        const onScroll = () => {
+          const max = document.documentElement.scrollHeight - window.innerHeight;
+          stateRef.current.progress = max > 0 ? clamp(window.scrollY / max) : 0;
+        };
+        const onMove = (e) => {
+          stateRef.current.mx = (e.clientX / window.innerWidth - 0.5);
+          stateRef.current.my = (e.clientY / window.innerHeight - 0.5);
+        };
+        const onResize = () => {
+          const w = window.innerWidth, h = window.innerHeight;
+          camera.aspect = w / h; camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+          onScroll();
+        };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('resize', onResize);
+        onScroll();
+
+        const start = performance.now();
+        const tick = () => {
+          if (!alive) return;
+          const t = (performance.now() - start) / 1000;
+          const p = stateRef.current.progress;
+          const { mx, my } = stateRef.current;
+          const camZ = lerp(6.5, -34, p);
+          const camY = lerp(0.2, 1.6 + my * 0.8, range(p, 0, 0.6)) + Math.sin(t * 0.4) * 0.05;
+          const camX = mx * 0.6;
+          camera.position.set(camX, camY, camZ);
+          camera.lookAt(camX * 0.4, camY * 0.5, camZ - 4);
+
+          const heroVis = fade(p, -0.05, 0.02, 0.10, 0.18);
+          icoLines.material.opacity = 0.85 * heroVis;
+          icoSolid.material.opacity = 0.92 * heroVis;
+          vDots.material.opacity = 0.95 * heroVis;
+          ring.material.opacity = 0.3 * heroVis;
+          heroGroup.rotation.y = t * 0.18 + mx * 0.5;
+          heroGroup.rotation.x = -0.22 + my * 0.3;
+
+          const workVis = fade(p, 0.08, 0.14, 0.30, 0.36);
+          constGroup.visible = workVis > 0.001;
+          if (constGroup.visible) {
+            constGroup.rotation.y = t * 0.08;
+            nodeMeshes.forEach((nm, i) => {
+              nm.cube.rotation.x = t * 0.6 + i;
+              nm.cube.rotation.y = t * 0.4 + i;
+              const pulse = 0.5 + 0.5 * Math.sin(t * 1.5 + i);
+              nm.cube.material.opacity = (0.4 + 0.5 * pulse) * workVis;
+              nm.wire.material.opacity = workVis * 0.95;
+            });
+            edgeLines.material.opacity = 0.22 * workVis;
+          }
+
+          const resVis = fade(p, 0.30, 0.36, 0.50, 0.56);
+          kvGroup.visible = resVis > 0.001;
+          if (kvGroup.visible) {
+            kvGroup.rotation.x = -0.15 + my * 0.1;
+            kvGroup.rotation.y = mx * 0.15;
+            kvGroup.children.forEach((b, i) => {
+              const wave = Math.sin(t * 1.4 + i * 0.3) * 0.05;
+              b.position.z = wave;
+              if (b.children[0]) b.children[0].material.opacity = resVis * 0.9;
+              b.material.opacity = (b.material.color.getHex() === C.ink ? 0.25 : 0.9) * resVis;
+            });
+          }
+
+          const expVis = fade(p, 0.58, 0.64, 0.78, 0.82);
+          railGroup.visible = expVis > 0.001;
+          if (railGroup.visible) {
+            railGroup.children.forEach((c) => { if (c.material) c.material.opacity = expVis; });
+            rail.material.transparent = true;
+            rail.material.opacity = 0.9 * expVis;
+          }
+
+          const starsVis = fade(p, 0.74, 0.80, 1.0, 1.05);
+          stars.material.opacity = 0.85 * starsVis;
+          stars.rotation.y = t * 0.02;
+          dust.rotation.y = t * 0.01;
+
+          renderer.render(scene, camera);
+          raf = requestAnimationFrame(tick);
+        };
+        tick();
+
+        cleanup = () => {
+          cancelAnimationFrame(raf);
+          window.removeEventListener('scroll', onScroll);
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('resize', onResize);
+          renderer.dispose();
+          if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+        };
+      });
+      return () => { alive = false; cleanup(); };
+    }, []);
+    return <div ref={mountRef} style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none' }} />;
+  };
+
+  // GlitchOverlay — scanlines, occasional RGB tear, vignette
+  window.GlitchOverlay = function GlitchOverlay() {
+    const [tear, setTear] = React.useState(false);
+    React.useEffect(() => {
+      let to;
+      const loop = () => {
+        const delay = 3000 + Math.random() * 6000;
+        to = setTimeout(() => {
+          setTear(true);
+          setTimeout(() => setTear(false), 110 + Math.random() * 120);
+          loop();
+        }, delay);
+      };
+      loop();
+      return () => clearTimeout(to);
+    }, []);
+    return (
+      <>
+        <style>{`
+          @keyframes scanlines { 0% { background-position: 0 0; } 100% { background-position: 0 4px; } }
+          @keyframes flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.85; } 98% { opacity: 1; } 99% { opacity: 0.92; } }
+          .glitch-scan { position: fixed; inset: 0; pointer-events: none; z-index: 200; background-image: repeating-linear-gradient(0deg, rgba(255,91,34,0.03) 0px, rgba(255,91,34,0.03) 1px, transparent 1px, transparent 3px); mix-blend-mode: overlay; animation: scanlines 0.4s linear infinite; }
+          .glitch-vignette { position: fixed; inset: 0; pointer-events: none; z-index: 199; background: radial-gradient(ellipse at center, transparent 50%, rgba(15,14,12,.65) 100%); animation: flicker 5s infinite; }
+          .glitch-tear { position: fixed; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #FF5B22 30%, #3df58c 50%, #FF5B22 70%, transparent); opacity: 0.9; pointer-events: none; z-index: 201; mix-blend-mode: screen; }
+          .glitch-noise { position: fixed; inset: 0; pointer-events: none; z-index: 198; opacity: 0.025; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>"); }
+        `}</style>
+        <div className="glitch-noise"></div>
+        <div className="glitch-vignette"></div>
+        <div className="glitch-scan"></div>
+        {tear && (
+          <>
+            <div className="glitch-tear" style={{ top: `${Math.random()*100}%` }}></div>
+            <div className="glitch-tear" style={{ top: `${Math.random()*100}%`, height: 1 }}></div>
+          </>
+        )}
+      </>
+    );
+  };
+})();
+
+// =============================================================
+// KV DEMO — interactive perplexity comparison for "Simpler is Better"
+// =============================================================
+(function () {
+  const POINTS = 21;
+  const curveMean = (b) => { const x = b / 100; return 9.2 - 4.8 * Math.pow(x, 0.55) + 0.18 * Math.sin(x * 7); };
+  const curveMax  = (b) => { const x = b / 100; return 8.7 - 5.0 * Math.pow(x, 0.6) + 0.10 * Math.sin(x * 7 + 1); };
+  const curveFull = () => 4.62;
+
+  window.KVDemo = function KVDemo() {
+    const [budget, setBudget] = React.useState(35);
+    const [model, setModel] = React.useState('Qwen2.5-3B');
+    const ppMean = curveMean(budget);
+    const ppMax = curveMax(budget);
+    const ppFull = curveFull();
+    const delta = (ppMean - ppMax).toFixed(3);
+
+    const W = 560, H = 220, padL = 44, padR = 16, padT = 14, padB = 32;
+    const xs = Array.from({ length: POINTS }, (_, i) => 5 + i * (95 / (POINTS - 1)));
+    const ys1 = xs.map(b => curveMean(b));
+    const ys2 = xs.map(b => curveMax(b));
+    const yMin = 4.4, yMax = 9.5;
+    const x = (b) => padL + ((b - 5) / 95) * (W - padL - padR);
+    const y = (v) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
+    const path = (ys) => xs.map((b, i) => `${i === 0 ? 'M' : 'L'} ${x(b).toFixed(1)} ${y(ys[i]).toFixed(1)}`).join(' ');
+
+    return (
+      <div style={{
+        border:'1px solid rgba(237,227,210,.14)', background:'rgba(237,227,210,.02)',
+        padding:'28px 32px', marginTop:32, maxWidth:880, fontFamily:'"JetBrains Mono",monospace',
+      }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:14, flexWrap:'wrap', marginBottom:6 }}>
+          <span style={{ fontSize:9, letterSpacing:2, color:'#FF5B22' }}>LIVE DEMO</span>
+          <span style={{ fontSize:11, letterSpacing:1.5, color:'rgba(237,227,210,.5)' }}>simulation from paper · pg19 · ppl ↓ better</span>
+        </div>
+        <h4 style={{ margin:'2px 0 16px', fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:30, color:'#EDE3D2', letterSpacing:-1, lineHeight:1.05 }}>
+          drag the budget. watch max-aggregation hold the line.
+        </h4>
+        <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'center', marginBottom:18 }}>
+          <div style={{ flex:'1 1 280px', minWidth:240 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:10.5, color:'rgba(237,227,210,.6)', letterSpacing:1.2 }}>
+              <span>KV BUDGET</span>
+              <span>{budget}% of full cache</span>
+            </div>
+            <input type="range" min="5" max="100" step="5" value={budget} onChange={(e) => setBudget(+e.target.value)} style={{ width:'100%', accentColor:'#FF5B22', marginTop:8 }} />
+          </div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {['Qwen2.5-3B','Llama-3.2-3B','Qwen2.5-1.5B'].map(m => (
+              <button key={m} onClick={() => setModel(m)} style={{
+                background: model===m ? '#FF5B22' : 'transparent',
+                color: model===m ? '#0F0E0C' : 'rgba(237,227,210,.7)',
+                border:'1px solid ' + (model===m ? '#FF5B22' : 'rgba(237,227,210,.18)'),
+                padding:'6px 10px', fontSize:10, letterSpacing:1, cursor:'pointer',
+                fontFamily:'inherit', fontWeight: model===m ? 700 : 400,
+              }}>{m}</button>
+            ))}
+          </div>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display:'block', maxHeight:260 }}>
+          {[5,6,7,8,9].map(v => (
+            <g key={v}>
+              <line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} stroke="rgba(237,227,210,.08)" strokeDasharray="2 4" />
+              <text x={padL - 8} y={y(v) + 3} textAnchor="end" fontSize="9" fill="rgba(237,227,210,.45)">{v.toFixed(1)}</text>
+            </g>
+          ))}
+          {[10,30,50,70,90].map(b => (
+            <text key={b} x={x(b)} y={H - padB + 14} textAnchor="middle" fontSize="9" fill="rgba(237,227,210,.45)">{b}%</text>
+          ))}
+          <line x1={padL} x2={W - padR} y1={y(ppFull)} y2={y(ppFull)} stroke="rgba(61,245,140,.4)" strokeDasharray="3 3" />
+          <text x={W - padR} y={y(ppFull) - 4} textAnchor="end" fontSize="9" fill="#3df58c">full cache · {ppFull.toFixed(2)}</text>
+          <path d={path(ys1)} fill="none" stroke="rgba(237,227,210,.55)" strokeWidth="1.5" />
+          <path d={path(ys2)} fill="none" stroke="#FF5B22" strokeWidth="2" />
+          <line x1={x(budget)} x2={x(budget)} y1={padT} y2={H - padB} stroke="rgba(255,91,34,.25)" strokeDasharray="2 3" />
+          <circle cx={x(budget)} cy={y(ppMean)} r="4" fill="rgba(237,227,210,.9)" />
+          <circle cx={x(budget)} cy={y(ppMax)} r="4" fill="#FF5B22" />
+        </svg>
+        <div style={{ display:'flex', gap:24, flexWrap:'wrap', marginTop:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ width:14, height:2, background:'rgba(237,227,210,.55)' }} />
+            <span style={{ fontSize:11, color:'rgba(237,227,210,.7)' }}>mean-agg (H2O baseline)</span>
+            <span style={{ fontSize:11, color:'#EDE3D2' }}>{ppMean.toFixed(3)}</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ width:14, height:2, background:'#FF5B22' }} />
+            <span style={{ fontSize:11, color:'rgba(237,227,210,.7)' }}>max-agg (ours)</span>
+            <span style={{ fontSize:11, color:'#FF5B22' }}>{ppMax.toFixed(3)}</span>
+          </div>
+          <div style={{ marginLeft:'auto', fontSize:11 }}>
+            <span style={{ color:'rgba(237,227,210,.5)' }}>Δ = </span>
+            <span style={{ color: delta > 0 ? '#3df58c' : '#FF5B22', fontWeight:700 }}>
+              {delta > 0 ? `−${delta} ppl` : `+${Math.abs(delta)}`}
+            </span>
+            <span style={{ color:'rgba(237,227,210,.5)' }}> (lower is better)</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+})();
+
+// =============================================================
+// LAB SECTION — experiments stash (5 cards)
+// =============================================================
+(function () {
+  const EXPERIMENTS = [
+    { id:'01', title:'Matcap Studio',          sub:'WebGL · matcap library + drag-to-relight',                blurb:'Interactive playground for matcap shading — drag the camera, swap textures, export the result.', status:'live',        accent:'#FF5B22', kind:'matcap' },
+    { id:'02', title:'Vernacular Voice',       sub:'NLP · code-mixed Hindi/English embeddings',               blurb:'Sketch of how Zeno parses code-mixed input — segments, intents, vibe markers.',                  status:'sketch',      accent:'#3df58c', kind:'bars' },
+    { id:'03', title:'KV Eviction Visualiser', sub:'Inference · which tokens survive each step',              blurb:'Heatmap of which positions a GQA model keeps vs drops as context grows. Companion to the paper.', status:'live',       accent:'#FF5B22', kind:'heatmap' },
+    { id:'04', title:'ASCII Confetti',         sub:'Canvas · particle burst from any keystroke',              blurb:'Stupid little library. Type anywhere, characters fly. Used in the workshop terminal\'s easter eggs.', status:'open-source', accent:'#fff5a0', kind:'ascii' },
+    { id:'05', title:'Squat Form Tracer',      sub:'CV · pose-estimation overlay for biomechanics',           blurb:'Real-time skeletal tracing companion to the squat-biomechanics paper. Webcam → joint angles.',     status:'in-review',  accent:'#fff5a0', kind:'pose' },
+  ];
+
+  const Art = ({ kind }) => {
+    if (kind === 'matcap') return (
+      <svg viewBox="0 0 200 120" width="100%" height="100%">
+        <defs>
+          <radialGradient id="mc1" cx="35%" cy="35%">
+            <stop offset="0%" stopColor="#fff5a0"/>
+            <stop offset="40%" stopColor="#FF5B22"/>
+            <stop offset="100%" stopColor="#0F0E0C"/>
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="60" r="44" fill="url(#mc1)"/>
+        <circle cx="100" cy="60" r="44" fill="none" stroke="rgba(237,227,210,.15)" strokeDasharray="2 3"/>
+      </svg>
+    );
+    if (kind === 'bars') return (
+      <svg viewBox="0 0 200 120" width="100%" height="100%">
+        {[...Array(7)].map((_,i)=>(
+          <rect key={i} x={20+i*22} y={50+Math.sin(i)*10} width="16" height={20+Math.abs(Math.sin(i*1.7))*30} fill="#3df58c" opacity={.4+(i%3)*.2}/>
+        ))}
+        <line x1="10" y1="100" x2="190" y2="100" stroke="rgba(237,227,210,.2)"/>
+      </svg>
+    );
+    if (kind === 'heatmap') return (
+      <svg viewBox="0 0 200 120" width="100%" height="100%">
+        {[...Array(8)].map((_,r)=>[...Array(16)].map((_,c)=>(
+          <rect key={r+'-'+c} x={10+c*11} y={10+r*12} width="9" height="10" fill="#FF5B22" opacity={Math.random()*.85+.05}/>
+        )))}
+      </svg>
+    );
+    if (kind === 'ascii') return (
+      <svg viewBox="0 0 200 120" width="100%" height="100%">
+        {['$','>','*','#','+','/','='].map((ch,i)=>(
+          <text key={i} x={20+i*24} y={60+Math.sin(i*1.4)*20} fontFamily="monospace" fontSize="18" fill="#fff5a0" transform={`rotate(${i*15-30} ${20+i*24} ${60})`}>{ch}</text>
+        ))}
+      </svg>
+    );
+    if (kind === 'pose') return (
+      <svg viewBox="0 0 200 120" width="100%" height="100%">
+        <line x1="100" y1="20" x2="100" y2="55" stroke="#EDE3D2" strokeWidth="2"/>
+        <circle cx="100" cy="18" r="7" fill="none" stroke="#EDE3D2" strokeWidth="2"/>
+        <line x1="100" y1="55" x2="78" y2="80" stroke="#EDE3D2" strokeWidth="2"/>
+        <line x1="100" y1="55" x2="122" y2="80" stroke="#EDE3D2" strokeWidth="2"/>
+        <line x1="78" y1="80" x2="70" y2="105" stroke="#FF5B22" strokeWidth="2"/>
+        <line x1="122" y1="80" x2="130" y2="105" stroke="#FF5B22" strokeWidth="2"/>
+        <circle cx="78" cy="80" r="4" fill="#FF5B22"/>
+        <circle cx="122" cy="80" r="4" fill="#FF5B22"/>
+        <text x="135" y="84" fontFamily="monospace" fontSize="9" fill="#FF5B22">92°</text>
+      </svg>
+    );
+    return null;
+  };
+
+  window.LabSection = function LabSection() {
+    return (
+      <section id="lab" style={{
+        padding:'120px 8vw',
+        borderTop:'1px solid rgba(237,227,210,.08)',
+        background:'linear-gradient(180deg, transparent, rgba(15,14,12,.55) 30%, rgba(15,14,12,.55) 70%, transparent)',
+      }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:24, marginBottom:48, flexWrap:'wrap' }}>
+          <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:2.5, color:'#FF5B22' }}>§ LAB</span>
+          <h2 style={{ margin:0, fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:'clamp(46px, 7vw, 92px)', lineHeight:1, color:'#EDE3D2', letterSpacing:-1.5 }}>The Lab</h2>
+          <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, color:'rgba(237,227,210,.5)', marginLeft:'auto' }}>5 experiments · half-built on purpose</span>
+        </div>
+        <p style={{ maxWidth:680, margin:'0 0 36px', fontFamily:'"JetBrains Mono",monospace', fontSize:13.5, lineHeight:1.85, color:'rgba(237,227,210,.75)' }}>
+          Things I poke at on weekends. Sketches, not products. Some of these become real;
+          most don&rsquo;t. They earn their keep by teaching me something the paid work won&rsquo;t.
+        </p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:20 }}>
+          {EXPERIMENTS.map(e => (
+            <article key={e.id} style={{
+              border:'1px solid rgba(237,227,210,.12)', background:'rgba(237,227,210,.02)',
+              padding:18, transition:'all .25s', cursor:'pointer',
+              display:'flex', flexDirection:'column',
+            }}
+              onMouseEnter={(ev) => { ev.currentTarget.style.borderColor=e.accent; ev.currentTarget.style.transform='translateY(-2px)'; }}
+              onMouseLeave={(ev) => { ev.currentTarget.style.borderColor='rgba(237,227,210,.12)'; ev.currentTarget.style.transform='translateY(0)'; }}
+            >
+              <div style={{ background:'#080706', border:'1px solid rgba(237,227,210,.06)', aspectRatio:'5/3', marginBottom:14, overflow:'hidden' }}>
+                <Art kind={e.kind} />
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6 }}>
+                <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:1.8, color:e.accent }}>EXP {e.id}</span>
+                <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:1.5, color:'rgba(237,227,210,.5)', textTransform:'uppercase' }}>{e.status}</span>
+              </div>
+              <h4 style={{ margin:'2px 0 4px', fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:24, color:'#EDE3D2', lineHeight:1.05 }}>{e.title}</h4>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, color:'rgba(237,227,210,.6)', marginBottom:10 }}>{e.sub}</div>
+              <p style={{ margin:0, fontFamily:'"JetBrains Mono",monospace', fontSize:12, lineHeight:1.7, color:'rgba(237,227,210,.78)' }}>{e.blurb}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  };
+})();
+
+
+// =============================================================
+// MAIN SITE — content + sections
+// =============================================================
+const NAV = [
+  { id:'about',       label:'About' },
+  { id:'work',        label:'Work' },
+  { id:'research',    label:'Research' },
+  { id:'lab',         label:'Lab' },
+  { id:'experience',  label:'Experience' },
+  { id:'now',         label:'Now' },
+  { id:'writing',     label:'Writing' },
+  { id:'contact',     label:'Contact' },
+];
+
+// glitchy text — vertical chromatic aberration + occasional Y jitter
+function GlitchText({ children, size, color = '#EDE3D2' }) {
+  const [jit, setJit] = React.useState(0);
+  React.useEffect(() => {
+    let to;
+    const loop = () => {
+      to = setTimeout(() => {
+        setJit(Math.random() * 5 - 2.5);
+        setTimeout(() => setJit(0), 90);
+        loop();
+      }, 2200 + Math.random() * 4000);
+    };
+    loop();
+    return () => clearTimeout(to);
+  }, []);
+  return (
+    <span style={{
+      display:'inline-block',
+      transform:`translateY(${jit}px)`,
+      fontFamily:'"Instrument Serif",serif', fontStyle:'italic',
+      fontSize:size, lineHeight:.92, letterSpacing:-4, color,
+      textShadow:`0 -2px #FF5B22, 0 2px #3df58c`,
+    }}>{children}</span>
+  );
+}
+
+const FEATURED = [
+  {
+    id:'aicade', tag:'01', tone:'DEEP-TECH', dates:'Sep 2023 — wound down',
+    title:'Aicade', sub:'Co-founder & CTO · text-to-game',
+    body:'Aicade was a deep-tech platform where anyone could generate, edit, and ship a complete playable game from a natural-language prompt. I co-founded it with Pushkar in 2023 and we grew engineering from 7 to 20 over the next two years. I owned technical architecture, hiring, and product direction. The work pulled me deep into diffusion models, vector embeddings, sprite-sheet generation pipelines, and game-engine integration — all under real product constraints, not benchmark conditions. By the time we wound the company down, the platform had shipped roughly 3,000 games with around 100 daily active users.',
+    stack:['Python','React','Diffusion models','Vector DBs','Game-engine integration'],
+    numbers:['~3,000 games shipped','~100 DAU','Team 7 → 20'],
+    links:[
+      { label:'aicade.io →', href:'https://aicade.io' },
+      { label:'arktoon.aicade.io →', href:'https://arktoon.aicade.io' },
+    ],
+  },
+  {
+    id:'zaqen', tag:'02', tone:'IN PRODUCTION', dates:'2024 — present',
+    title:'Zaqencare', sub:'Geriatric / home-care scheduling · live in Canada',
+    body:'Zaqencare is a scheduling product for home and geriatric care, with a web app and a mobile app on the Play Store. The system handles recurring care blocks, employee assignment, payroll vs client-side recurrence, and outreach management. I work across the whole stack: Flask backend on Azure, React frontend, mobile companion, and the deployment infrastructure. The product runs in production for real care teams in Canada.',
+    stack:['Flask','Azure','React','React Native','PostgreSQL'],
+    numbers:['Live in Canada','Web + Play Store'],
+    links:[
+      { label:'zaqencare.ca →', href:'https://zaqencare.ca' },
+    ],
+  },
+  {
+    id:'zeno', tag:'03', tone:'CURRENT', dates:'2025 — present',
+    title:'Codename Zeno', sub:'WhatsApp companion, pivoting to Claude Desktop',
+    body:'Zeno is a WhatsApp-native AI companion designed around the way Indian users actually talk to their phones — voice notes, code-mixed Hindi/English, and trust earned through small daily moments rather than therapy framing. The architecture pairs a per-turn context reconstruction memory system with a cultural intelligence layer for festivals, family dynamics, and vernacular voice. The current pivot adds a Claude Desktop MCP connector and companion window that creates a co-working social layer (random matching, presence indicators, skip/next) for the idle minutes during long Claude tasks. Companion product Buddy is incoming. Selected as one of the top 300 builders out of 20,000+ applicants for VibeCon 2026, the YC-partnered hackathon in Bangalore.',
+    stack:['Python','WhatsApp Cloud API','Claude','Hindi ASR','React','Framer Motion','UPI AutoPay','MCP'],
+    numbers:['VibeCon top 300 / 20k+','~1.5% acceptance'],
+    links:[
+      { label:'zeno.localhost5173.live →', href:'https://zeno.localhost5173.live' },
+      { label:'Whitepaper (#research) →', href:'#research' },
+      { label:'Buddy — incoming', href:'#contact' },
+    ],
+  },
+];
+
+const SELECTED = [
+  { title:'Caddies — MCW Fund',          desc:'Frontend for a non-profit caddie support platform.',                           href:'https://mcwfund.org' },
+  { title:'Satoshi Terminal',            desc:'Landing page + frontend/backend for a blockchain intelligence platform out of Texas.', href:'https://satoshiterminal.io' },
+  { title:'Pulstra (early)',             desc:'The original Pulstra site, before it pivoted to a consultancy.',               href:'https://pulstra.framer.website' },
+  { title:'Arktoon',                     desc:'Sprite-sheet animation tool. Part of the Aicade ecosystem.',                   href:'https://arktoon.aicade.io' },
+  { title:'Quant — Backtesting',         desc:'A backtesting visualization platform for my own quant research. Strategy ideation, parameter sweeps, visual playback over historical data.', href:null },
+  { title:'VC Deal Sourcing Tool',       desc:'Internal tool for a VC contact to source and rank early-stage deals at scale.', href:null },
+  { title:'Guelphil — Geriatric NGO',    desc:'A scheduling app built for a geriatric-care NGO to coordinate caregivers and recurring visits.', href:null },
+];
+
+const PAPERS = [
+  {
+    title:'Simpler is Better: GQA-Aware KV Cache Eviction and the Failure of Diversity',
+    venue:'arXiv preprint · solo · 2026',
+    abstract:'Prior eviction methods inherited mean-aggregation from the MHA era and kept using it on GQA out of habit. Switching to max-aggregation (union semantics over query heads inside each KV group) beats H2O on PG19 perplexity at every tested KV budget across Qwen2.5-3B, Llama-3.2-3B, and Qwen2.5-1.5B. Hybrid H2O + SnapKV scoring with per-layer top-k. Two negative results: MMR diversity hurts; entropy-guided budgets also hurt.',
+    status:'preprint',
+  },
+  {
+    title:'Ship-hull paper',
+    venue:'Results in Engineering · Elsevier · Q1 · IF 9.20',
+    abstract:'Published. Final title and DOI on request.',
+    status:'published',
+  },
+  {
+    title:'Squat biomechanics',
+    venue:'with Prof. Davidson Jebaseelan · VIT Chennai',
+    abstract:'Lead author. Built the unsupervised temporal benchmarking model, ran data collection across 20 participants, led the writeup. Currently with the journal for first-round review.',
+    status:'in review',
+  },
+  {
+    title:'Codename Zeno: A Cultural Intelligence Architecture for AI Companions in India',
+    venue:'whitepaper',
+    abstract:'Architecture and feature spec for Zeno: WhatsApp-first delivery, three-layer memory system, Hindi ASR, UPI AutoPay, family dashboard, and the cultural intelligence layer. Includes a teardown of Tolan, Replika, Nomi, Wysa, Rumik, and Character.AI as comparative context.',
+    status:'whitepaper',
+  },
+];
+
+const EXPERIENCE = [
+  { years:'Sep 2023 — wound down', role:'Co-founder & CTO · Aicade',                                  desc:'Text-to-game. Eng 7→20. ~3,000 games shipped. Architecture, hiring, product direction.' },
+  { years:'Jul 2024 — present',    role:'Founder & Director · Pulstra Technologies',                  desc:'AI/ML consultancy. Active engagements: Satoshi Terminal, Omniactive, Visteon.' },
+  { years:'Mar 2025 — present',    role:'Senior Infrastructure Consultant · Satoshi Terminal',       desc:'Remote, Texas. Domain setup, deployment infra, frontend + backend for a blockchain intelligence platform.' },
+  { years:'Sep 2024 — Feb 2025',   role:'Senior DevOps · Satoshi Terminal',                          desc:'Multi-region cloud infrastructure. CI/CD, container orchestration, deployment automation. AWS (EC2, S3, Lambda), Docker.' },
+  { years:'Feb — Sep 2024',        role:'Samsung Prism Developer',                                    desc:'RAG-based research platform for Samsung R&D. Recognized with the Samsung Prism Excellence Award.' },
+  { years:'2020 — 2024',           role:'B.Tech CSE · VIT Chennai',                                   desc:'GPA 8.16/10. Capstone (S, highest grade): text-to-video for educational content, deployed across three schools.' },
+  { years:'Sep 2026',              role:'MSc · UK (entry)',                                           desc:'Bristol AI for Business / Imperial AI Applications & Innovation / Manchester / Edinburgh.' },
+];
+
+const RECOG = [
+  { t:'VibeCon 2026 — top 300 / 20,000+ (~1.5%)',   d:'YC-partnered hackathon in Bangalore. With Pushkar.' },
+  { t:'DevForge — top 6 finalist',                   d:'Placed 6th of the full applicant pool.' },
+  { t:'Samsung Prism Excellence Award',              d:'For the RAG-based research platform built during Samsung Prism.' },
+  { t:'TEDxVITC — relaunched the chapter',           d:'Worked through institutional bureaucracy to bring it back.' },
+  { t:'vibecon.sh — responsible disclosure',         d:'13 vulnerabilities including 4 criticals (unauthenticated ObjectID enumeration, IDOR on RSVP, exposed check-in codes, NoSQL injection w/ confirmed server-side JS execution). Filed formally with Emergent leadership.' },
+];
+
+const SKILLS = [
+  { group:'AI / ML',                  items:['LLMs','KV cache internals','GQA','RAG','Vector databases','Diffusion models','Computer vision','Quantization','Hindi ASR'] },
+  { group:'Backend & Infrastructure', items:['Python','FastAPI','Flask','Node.js','PostgreSQL','AWS (EC2, S3, Lambda, ECS, RDS)','Azure','Terraform','Docker','Nginx','CI/CD'] },
+  { group:'Frontend',                 items:['React','Next.js','React Native','Framer Motion','Tailwind','TypeScript'] },
+  { group:'Other',                    items:['WhatsApp Cloud API','UPI AutoPay','Game engine integration','MCP (Model Context Protocol)'] },
+];
+
+const WRITING = [
+  { title:'Thirteen Vulnerabilities in a YC Hackathon’s Backend',                       angle:'The vibecon.sh disclosure writeup. ObjectID enumeration, IDOR, NoSQL injection. Technical and matter-of-fact. Ends with what hackathon platforms should do differently.' },
+  { title:'Simpler is Better: How GQA Broke What Worked for KV Cache Eviction',              angle:'Accessible version of the KV paper. Lead with the analogy: matrix multiplication for 4×5 problems. Not a paper summary — a story about why nobody noticed.' },
+  { title:'Six AI Companions, Six Different Bets',                                            angle:'Tolan / Replika / Nomi / Wysa / Rumik / Character.AI teardown for builders, not internal strategy. Ends with what Zeno’s bet is and why.' },
+  { title:'Building for WhatsApp When You Don’t Control the Surface',                   angle:'The engineering reality of building a companion product whose runtime is someone else’s chat app. Sub-megabyte memory, per-turn context reconstruction, voice-note-first UX.' },
+  { title:'On Doing Research, Consulting, and a Startup at the Same Time',                   angle:'The compounding argument. Why these don’t have to compete, what breaks when they do, and the case for grad school after shipping in industry.' },
+];
+
+// =============================================================
+// Site components
+// =============================================================
+function Nav() {
+  const [scrolled, setScrolled] = React.useState(false);
+  React.useEffect(() => {
+    const f = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', f); f();
+    return () => window.removeEventListener('scroll', f);
+  }, []);
+  const scroll = (id) => { document.getElementById(id)?.scrollIntoView({ behavior:'smooth', block:'start' }); };
+  return (
+    <nav style={{
+      position:'fixed', top:0, left:0, right:0, zIndex:50,
+      padding:'18px 32px',
+      background: scrolled ? 'rgba(15,14,12,.85)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(12px)' : 'none',
+      borderBottom: scrolled ? '1px solid rgba(237,227,210,.08)' : '1px solid transparent',
+      transition:'background .3s, border .3s',
+      display:'flex', alignItems:'center', justifyContent:'space-between',
+    }}>
+      <button onClick={() => window.scrollTo({ top:0, behavior:'smooth' })} style={{
+        background:'transparent', border:'none', cursor:'pointer',
+        fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:24, color:'#EDE3D2',
+        padding:0,
+      }}>Sang.</button>
+      <div style={{ display:'flex', alignItems:'center', gap:24, flexWrap:'wrap' }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => scroll(n.id)} style={{
+            background:'transparent', border:'none', cursor:'pointer',
+            fontFamily:'"JetBrains Mono",monospace', fontSize:11, letterSpacing:1.5,
+            color:'rgba(237,227,210,.7)', textTransform:'uppercase', padding:0,
+          }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#FF5B22'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(237,227,210,.7)'}
+          >{n.label}</button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function btn(kind) {
+  const primary = kind === 'primary';
+  return {
+    display:'inline-block',
+    padding:'12px 18px',
+    background: primary ? '#FF5B22' : 'transparent',
+    color: primary ? '#0F0E0C' : '#EDE3D2',
+    border: primary ? '1px solid #FF5B22' : '1px solid rgba(237,227,210,.25)',
+    fontFamily:'"JetBrains Mono",monospace', fontSize:12, letterSpacing:1, fontWeight:primary?700:400,
+    textDecoration:'none', textTransform: primary?'uppercase':'none',
+    transition:'all .2s',
+  };
+}
+
+function Hero() {
+  return (
+    <section className="hero-grid" style={{
+      minHeight:'100vh', padding:'120px 8vw 80px',
+      display:'grid', gridTemplateColumns:'minmax(0,1fr) auto',
+      gap:60, alignItems:'center', position:'relative',
+    }}>
+      <style>{`
+        @media (max-width: 900px) {
+          .hero-grid { grid-template-columns: 1fr !important; }
+          .hero-term-wrap { justify-self: stretch !important; }
+        }
+      `}</style>
+      <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 20% 30%, rgba(255,91,34,.08) 0%, transparent 50%)', pointerEvents:'none' }} />
+      <div style={{ minWidth:0 }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:10, marginBottom:32 }}>
+          <span style={{ width:8, height:8, borderRadius:'50%', background:'#3df58c', boxShadow:'0 0 0 4px rgba(61,245,140,.15)', animation:'pulse 2s infinite' }} />
+          <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, letterSpacing:2, color:'rgba(237,227,210,.7)' }}>
+            [SYS] AVAILABLE · OPEN FOR RESEARCH COLLABS &amp; CONTRACT AI/ML
+          </span>
+        </div>
+        <h1 style={{ margin:0 }}>
+          <GlitchText size={'clamp(64px, 11vw, 180px)'}>Sang<span style={{ color:'#FF5B22' }}>.</span></GlitchText>
+        </h1>
+        <p style={{
+          margin:'32px 0 0', maxWidth:580,
+          fontFamily:'"JetBrains Mono",monospace', fontSize:15, lineHeight:1.7,
+          color:'rgba(237,227,210,.92)',
+        }}>
+          <span style={{ color:'#FF5B22' }}>$</span> whoami<br/>
+          I build AI products. Across very different industries, mostly to ship.
+          The throughline: I like the stuff between research and users — where models
+          meet real infrastructure and break in interesting ways.
+        </p>
+        <p style={{
+          margin:'14px 0 0', maxWidth:580,
+          fontFamily:'"JetBrains Mono",monospace', fontSize:13, lineHeight:1.7,
+          color:'rgba(237,227,210,.55)',
+        }}>
+          CSE, VIT Chennai. Co-founder &amp; CTO at <span style={{ color:'#EDE3D2' }}>Aicade</span>.
+          Founder of <span style={{ color:'#EDE3D2' }}>Pulstra</span>.
+          Currently building <span style={{ color:'#EDE3D2' }}>Zeno</span>.
+          Heading to a UK MSc in September 2026.
+        </p>
+        <div style={{ display:'flex', gap:12, marginTop:42, flexWrap:'wrap' }}>
+          <a href="#work" onClick={(e) => { e.preventDefault(); document.getElementById('work')?.scrollIntoView({ behavior:'smooth' }); }} style={btn('primary')}>See work →</a>
+          <a href="#contact" onClick={(e) => { e.preventDefault(); document.getElementById('contact')?.scrollIntoView({ behavior:'smooth' }); }} style={btn()}>Get in touch</a>
+        </div>
+        <div style={{ display:'flex', gap:18, marginTop:22, flexWrap:'wrap', fontFamily:'"JetBrains Mono",monospace', fontSize:11, letterSpacing:.5 }}>
+          <a href="mailto:sangrish03@gmail.com" style={{ color:'rgba(237,227,210,.65)', textDecoration:'none', borderBottom:'1px solid rgba(237,227,210,.18)', paddingBottom:1 }}>sangrish03@gmail.com</a>
+          <a href="https://linkedin.com/in/sangrish" style={{ color:'rgba(237,227,210,.65)', textDecoration:'none', borderBottom:'1px solid rgba(237,227,210,.18)', paddingBottom:1 }}>linkedin</a>
+          <a href="https://github.com/sangrish-braincade" style={{ color:'rgba(237,227,210,.65)', textDecoration:'none', borderBottom:'1px solid rgba(237,227,210,.18)', paddingBottom:1 }}>github</a>
+          <a href="https://x.com/Sangrish03" style={{ color:'rgba(237,227,210,.65)', textDecoration:'none', borderBottom:'1px solid rgba(237,227,210,.18)', paddingBottom:1 }}>x / @Sangrish03</a>
+        </div>
+      </div>
+      <div className="hero-term-wrap" style={{ minWidth:0, justifySelf:'end', width:'100%', maxWidth:560 }}>
+        {window.HeroTerminal && <window.HeroTerminal />}
+      </div>
+      <div style={{ position:'absolute', bottom:30, left:'8vw', fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:3, color:'rgba(237,227,210,.4)' }}>
+        ↓ scroll
+      </div>
+    </section>
+  );
+}
+
+function SectionHead({ tag, title, kicker }) {
+  return (
+    <div style={{ display:'flex', alignItems:'baseline', gap:24, marginBottom:48, flexWrap:'wrap' }}>
+      <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:2.5, color:'#FF5B22' }}>§ {tag}</span>
+      <h2 style={{ margin:0, fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:'clamp(46px, 7vw, 92px)', lineHeight:1, color:'#EDE3D2', letterSpacing:-1.5 }}>{title}</h2>
+      {kicker && <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, color:'rgba(237,227,210,.5)', marginLeft:'auto' }}>{kicker}</span>}
+    </div>
+  );
+}
+
+function AboutSection() {
+  return (
+    <section id="about" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="01" title="About" kicker="three things, one throughline" />
+      <div style={{ maxWidth:880, display:'flex', flexDirection:'column', gap:18 }}>
+        <p style={{ margin:0, fontFamily:'"JetBrains Mono",monospace', fontSize:14, lineHeight:1.85, color:'rgba(237,227,210,.85)' }}>
+          I build AI products, mostly across domains that have nothing in common with each other:
+          text-to-game generation at <span style={{ color:'#EDE3D2' }}>Aicade</span>,
+          scheduling for elder care at <span style={{ color:'#EDE3D2' }}>Zaqencare</span>,
+          blockchain analytics at <span style={{ color:'#EDE3D2' }}>Satoshi Terminal</span>,
+          computer vision for <span style={{ color:'#EDE3D2' }}>Visteon</span>,
+          voice and memory architecture for <span style={{ color:'#EDE3D2' }}>Zeno</span>.
+          The throughline is that I like working on the stuff between research and users — where models meet real infrastructure and break in interesting ways.
+        </p>
+        <p style={{ margin:0, fontFamily:'"JetBrains Mono",monospace', fontSize:14, lineHeight:1.85, color:'rgba(237,227,210,.75)' }}>
+          I co-founded Aicade in 2023 and grew engineering from 7 to 20. I run my own consultancy,
+          <span style={{ color:'#EDE3D2' }}> Pulstra</span>, through which I work with Satoshi Terminal, Omniactive, and Visteon.
+          On the research side: one paper published in <em style={{ fontFamily:'"Instrument Serif",serif' }}>Results in Engineering</em>,
+          one under review, and a solo preprint on KV cache eviction in GQA models. In September 2026 I&rsquo;m starting a UK MSc to formalize the research side properly.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function WorkSection() {
+  return (
+    <section id="work" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="02" title="Selected Work" kicker={`${FEATURED.length} featured · more in selected projects`} />
+      <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
+        {FEATURED.map(w => <WorkCard key={w.id} w={w} />)}
+      </div>
+    </section>
+  );
+}
+
+function WorkCard({ w }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{
+      border:'1px solid rgba(237,227,210,.12)',
+      background:'rgba(237,227,210,.02)',
+      padding:'28px 32px', transition:'all .3s', cursor:'pointer',
+    }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor='rgba(255,91,34,.5)'; e.currentTarget.style.background='rgba(255,91,34,.04)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor='rgba(237,227,210,.12)'; e.currentTarget.style.background='rgba(237,227,210,.02)'; }}
+      onClick={() => setOpen(o => !o)}
+    >
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:24, flexWrap:'wrap' }}>
+        <div style={{ flex:1, minWidth:280 }}>
+          <div style={{ display:'flex', gap:14, alignItems:'baseline', marginBottom:6, flexWrap:'wrap' }}>
+            <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:2, color:'#FF5B22' }}>№ {w.tag}</span>
+            <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:2, color:'rgba(237,227,210,.5)', textTransform:'uppercase' }}>{w.tone}</span>
+            <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, color:'rgba(237,227,210,.4)', marginLeft:'auto' }}>{w.dates}</span>
+          </div>
+          <h3 style={{ margin:0, fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:48, lineHeight:1, color:'#EDE3D2' }}>{w.title}</h3>
+          <p style={{ margin:'8px 0 0', fontFamily:'"JetBrains Mono",monospace', fontSize:13, color:'rgba(237,227,210,.7)' }}>{w.sub}</p>
+        </div>
+        <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:18, color:'#FF5B22', transform: open ? 'rotate(45deg)' : 'rotate(0)', transition:'transform .3s' }}>+</div>
+      </div>
+      <div style={{ maxHeight: open ? 900 : 0, overflow:'hidden', transition:'max-height .4s ease' }}>
+        <p style={{ marginTop:18, marginBottom:18, fontFamily:'"JetBrains Mono",monospace', fontSize:13, lineHeight:1.85, color:'rgba(237,227,210,.85)', maxWidth:820 }}>{w.body}</p>
+        {w.stack && w.stack.length > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:2.5, color:'rgba(237,227,210,.45)', textTransform:'uppercase', marginBottom:8 }}>stack</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {w.stack.map(c => (
+                <span key={c} style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:.5, padding:'5px 10px', border:'1px solid rgba(237,227,210,.18)', color:'rgba(237,227,210,.85)', background:'rgba(237,227,210,.03)' }}>{c}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {w.numbers && w.numbers.length > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:2.5, color:'#FF5B22', textTransform:'uppercase', marginBottom:8 }}>by the numbers</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {w.numbers.map(c => (
+                <span key={c} style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:1.5, padding:'4px 10px', border:'1px solid rgba(255,91,34,.4)', color:'#FF5B22', textTransform:'uppercase' }}>{c}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {w.links && w.links.length > 0 && (
+          <div style={{ display:'flex', gap:18, flexWrap:'wrap', marginTop:6 }}>
+            {w.links.map(l => (
+              <a key={l.href} href={l.href} target={l.href.startsWith('#') ? undefined : '_blank'} rel={l.href.startsWith('#') ? undefined : 'noreferrer'} onClick={(e) => e.stopPropagation()} style={{
+                fontFamily:'"JetBrains Mono",monospace', fontSize:11, letterSpacing:1, color:'#FF5B22',
+                textDecoration:'none', borderBottom:'1px solid rgba(255,91,34,.4)', paddingBottom:1,
+              }}>{l.label}</a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SelectedProjects() {
+  return (
+    <section id="selected" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="03" title="Selected Projects" kicker="smaller pieces · still mine" />
+      <div style={{
+        display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:18,
+      }}>
+        {SELECTED.map(p => (
+          <a key={p.title} href={p.href || '#'} target={p.href ? '_blank' : undefined} rel={p.href ? 'noreferrer' : undefined}
+             onClick={(e) => { if (!p.href) e.preventDefault(); }}
+             style={{
+               display:'block', textDecoration:'none', color:'inherit',
+               border:'1px solid rgba(237,227,210,.12)', background:'rgba(237,227,210,.02)',
+               padding:'20px 22px', transition:'all .25s',
+               cursor: p.href ? 'pointer' : 'default',
+             }}
+             onMouseEnter={(e) => { if (p.href) { e.currentTarget.style.borderColor='rgba(255,91,34,.5)'; e.currentTarget.style.background='rgba(255,91,34,.04)'; } }}
+             onMouseLeave={(e) => { e.currentTarget.style.borderColor='rgba(237,227,210,.12)'; e.currentTarget.style.background='rgba(237,227,210,.02)'; }}
+          >
+            <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:10 }}>
+              <h3 style={{ margin:0, fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:24, lineHeight:1.1, color:'#EDE3D2' }}>{p.title}</h3>
+              <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:14, color:p.href ? '#FF5B22' : 'rgba(237,227,210,.3)' }}>{p.href ? '↗' : '·'}</span>
+            </div>
+            <p style={{ margin:'10px 0 0', fontFamily:'"JetBrains Mono",monospace', fontSize:12, lineHeight:1.7, color:'rgba(237,227,210,.7)' }}>{p.desc}</p>
+            {p.href && (
+              <div style={{ marginTop:10, fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:1, color:'rgba(255,91,34,.7)' }}>
+                {p.href.replace(/^https?:\/\//, '')}
+              </div>
+            )}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ResearchSection() {
+  const colorFor = (s) => s === 'published' ? '#3df58c' : s === 'preprint' ? '#FF5B22' : s === 'whitepaper' ? '#c69bff' : '#fff5a0';
+  return (
+    <section id="research" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="04" title="Research" kicker="published · preprint · in review · whitepaper" />
+      <div style={{ display:'flex', flexDirection:'column', gap:32 }}>
+        {PAPERS.map((p, i) => (
+          <div key={i} style={{ borderLeft:'2px solid #FF5B22', paddingLeft:24, maxWidth:880 }}>
+            <div style={{ display:'flex', gap:10, alignItems:'baseline', marginBottom:8, flexWrap:'wrap' }}>
+              <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:2, padding:'3px 8px', background:colorFor(p.status), color:'#0F0E0C', textTransform:'uppercase' }}>{p.status}</span>
+              <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, color:'rgba(237,227,210,.5)' }}>{p.venue}</span>
+            </div>
+            <h3 style={{ margin:'4px 0', fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:30, lineHeight:1.1, color:'#EDE3D2' }}>{p.title}</h3>
+            <p style={{ marginTop:10, fontFamily:'"JetBrains Mono",monospace', fontSize:12.5, lineHeight:1.8, color:'rgba(237,227,210,.75)' }}>{p.abstract}</p>
+            {i === 0 && window.KVDemo && <window.KVDemo />}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ExperienceSection() {
+  return (
+    <section id="experience" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="05" title="Experience" />
+      <div style={{ display:'flex', flexDirection:'column' }}>
+        {EXPERIENCE.map((e, i) => (
+          <div key={i} style={{
+            display:'grid', gridTemplateColumns:'220px 1fr', gap:32,
+            padding:'22px 0', borderTop:'1px solid rgba(237,227,210,.08)',
+          }}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, letterSpacing:1.2, color:'rgba(237,227,210,.5)' }}>{e.years}</div>
+            <div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:14, color:'#EDE3D2', fontWeight:500 }}>{e.role}</div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:12, color:'rgba(237,227,210,.6)', marginTop:4 }}>{e.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecognitionSection() {
+  return (
+    <section id="recognition" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="06" title="Recognition" />
+      <div style={{ display:'flex', flexDirection:'column', gap:18, maxWidth:880 }}>
+        {RECOG.map((r, i) => (
+          <div key={i} style={{ display:'grid', gridTemplateColumns:'24px 1fr', gap:14, alignItems:'baseline' }}>
+            <span style={{ color:'#FF5B22', fontSize:12 }}>★</span>
+            <div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:13, color:'#EDE3D2', lineHeight:1.5 }}>{r.t}</div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11.5, color:'rgba(237,227,210,.6)', lineHeight:1.7, marginTop:4 }}>{r.d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SkillsSection() {
+  return (
+    <section id="skills" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="07" title="Skills" kicker="clustered, not a dump" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:24 }}>
+        {SKILLS.map(s => (
+          <div key={s.group} style={{ border:'1px solid rgba(237,227,210,.12)', background:'rgba(237,227,210,.02)', padding:'20px 22px' }}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:2.5, color:'#FF5B22', marginBottom:14, textTransform:'uppercase' }}>
+              ◆ {s.group}
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+              {s.items.map(it => (
+                <span key={it} style={{
+                  fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:.5,
+                  padding:'5px 10px', border:'1px solid rgba(237,227,210,.18)',
+                  color:'rgba(237,227,210,.85)', background:'rgba(237,227,210,.03)',
+                }}>{it}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NowSection() {
+  return (
+    <section id="now" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="08" title="Now" kicker="this week · auto-stale" />
+      <div style={{ maxWidth:820, fontFamily:'"JetBrains Mono",monospace', fontSize:14, lineHeight:2, color:'rgba(237,227,210,.85)' }}>
+        {[
+          'Codename Zeno + Claude Desktop companion-window pivot.',
+          '"Simpler is Better" KV-cache paper → arXiv this week.',
+          'Squat-biomechanics paper with Prof. Davidson — under journal review.',
+          'UK MSc applications, Sep 2026 entry.',
+          'Pulstra clients: Satoshi · Omniactive · Visteon.',
+        ].map((t, i) => (
+          <div key={i} style={{ display:'flex', gap:12, alignItems:'baseline', marginBottom:6 }}>
+            <span style={{ color:'#FF5B22' }}>▸</span>
+            <span>{t}</span>
+          </div>
+        ))}
+        <div style={{ marginTop:24, fontFamily:'"JetBrains Mono",monospace', fontSize:10, letterSpacing:2, color:'rgba(237,227,210,.4)' }}>
+          LAST UPDATED · MAY 2026
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WritingSection() {
+  return (
+    <section id="writing" style={{ padding:'120px 8vw', borderTop:'1px solid rgba(237,227,210,.08)' }}>
+      <SectionHead tag="09" title="Writing" kicker="drafts in progress" />
+      <p style={{
+        maxWidth:780, marginTop:-16, marginBottom:32,
+        fontFamily:'"JetBrains Mono",monospace', fontSize:13, lineHeight:1.8, color:'rgba(237,227,210,.65)',
+      }}>
+        Five angles I&rsquo;m drafting. The actual posts go up here as they ship.
+      </p>
+      <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+        {WRITING.map((w, i) => (
+          <div key={i} style={{
+            border:'1px solid rgba(237,227,210,.12)', background:'rgba(237,227,210,.02)',
+            padding:'22px 26px', maxWidth:980,
+          }}>
+            <div style={{ display:'flex', gap:14, alignItems:'baseline', marginBottom:8, flexWrap:'wrap' }}>
+              <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, letterSpacing:2, padding:'3px 8px', background:'rgba(237,227,210,.08)', color:'rgba(237,227,210,.6)', textTransform:'uppercase' }}>draft</span>
+              <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, color:'rgba(237,227,210,.4)' }}>№ {String(i+1).padStart(2,'0')}</span>
+            </div>
+            <h3 style={{ margin:'4px 0 8px', fontFamily:'"Instrument Serif",serif', fontStyle:'italic', fontSize:24, lineHeight:1.15, color:'#EDE3D2' }}>{w.title}</h3>
+            <p style={{ margin:0, fontFamily:'"JetBrains Mono",monospace', fontSize:12.5, lineHeight:1.8, color:'rgba(237,227,210,.7)' }}>{w.angle}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ContactSection() {
+  return (
+    <section id="contact" style={{ padding:'140px 8vw 100px', borderTop:'1px solid rgba(237,227,210,.08)', position:'relative' }}>
+      <SectionHead tag="10" title="Get in touch" />
+      <div style={{ maxWidth:880 }}>
+        <p style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:14, lineHeight:1.85, color:'rgba(237,227,210,.85)' }}>
+          Open for: research collabs · contract AI/ML · advisory.<br/>
+          Closed for: typical SaaS frontend gigs.<br/>
+          Pulstra rate sheet on request.
+        </p>
+        <a href="mailto:sangrish03@gmail.com" style={{
+          display:'inline-block', marginTop:32,
+          fontFamily:'"Instrument Serif",serif', fontStyle:'italic',
+          fontSize:'clamp(40px, 6vw, 72px)', lineHeight:1, color:'#FF5B22',
+          textDecoration:'none', borderBottom:'2px solid #FF5B22',
+          letterSpacing:-1,
+        }}>sangrish03@gmail.com →</a>
+        <div style={{ display:'flex', gap:24, marginTop:36, flexWrap:'wrap', fontFamily:'"JetBrains Mono",monospace', fontSize:12 }}>
+          <a href="https://linkedin.com/in/sangrish" style={{ color:'rgba(237,227,210,.7)' }}>linkedin/in/sangrish</a>
+          <a href="https://github.com/sangrish-braincade" style={{ color:'rgba(237,227,210,.7)' }}>github/sangrish-braincade</a>
+          <a href="https://x.com/Sangrish03" style={{ color:'rgba(237,227,210,.7)' }}>x/@Sangrish03</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer style={{ padding:'40px 8vw', borderTop:'1px solid rgba(237,227,210,.08)', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:14, fontFamily:'"JetBrains Mono",monospace', fontSize:10, color:'rgba(237,227,210,.4)' }}>
+      <span>sangrish · 2026 · made with too much coffee</span>
+      <span>last updated this week</span>
+    </footer>
+  );
+}
+
+function Site() {
+  return (
+    <div style={{ background:'#0F0E0C', color:'#EDE3D2', minHeight:'100vh', position:'relative' }}>
+      {window.ScrollScene && <window.ScrollScene />}
+      {window.GlitchOverlay && <window.GlitchOverlay />}
+      <div style={{ position:'relative', zIndex:1 }}>
+        <Nav />
+        <Hero />
+        <AboutSection />
+        <WorkSection />
+        <SelectedProjects />
+        <ResearchSection />
+        {window.LabSection && <window.LabSection />}
+        <ExperienceSection />
+        <RecognitionSection />
+        <SkillsSection />
+        <NowSection />
+        <WritingSection />
+        <ContactSection />
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return <Site />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
