@@ -369,7 +369,22 @@ function update(dt){
   plazaMat.roughness = 1.0 - dn.wet*0.45; plazaMat.envMapIntensity = 0.22 + dn.wet*0.6;
 }
 
-function animate(){ requestAnimationFrame(animate); if (window.__freeze) return; resize(); const dt=Math.min(clock.getDelta(),0.05); update(dt); if (LOW) renderer.render(scene, camera); else composer.render(); }
+// adaptive quality — hold ~60fps: first scale render resolution, then drop bloom
+let q_pr = LOW ? 1 : 1.5; const q_floor = LOW ? 0.6 : 0.75, q_cap = LOW ? 1 : 1.5;
+let q_bloom = !LOW, q_fA = 0, q_ft = 0;
+function q_setPR(p){ q_pr = p; renderer.setPixelRatio(p); renderer.setSize(curW||innerWidth, curH||innerHeight); composer.setSize(curW||innerWidth, curH||innerHeight); }
+function render(){ if (q_bloom) composer.render(); else renderer.render(scene, camera); }
+function animate(){
+  requestAnimationFrame(animate); if (window.__freeze) return;
+  resize();
+  const dt = Math.min(clock.getDelta(), 0.05); update(dt);
+  q_fA++; q_ft += dt;
+  if (q_ft >= 0.6){ const fps = q_fA/q_ft; q_fA = 0; q_ft = 0;
+    if (fps < 48){ if (q_pr > q_floor) q_setPR(Math.max(q_floor, q_pr-0.2)); else if (q_bloom) q_bloom = false; }
+    else if (fps > 58){ if (!q_bloom && !LOW) q_bloom = true; else if (q_pr < q_cap) q_setPR(Math.min(q_cap, q_pr+0.1)); }
+  }
+  render();
+}
 window.__kick = animate; animate();
 
 var curW, curH;
@@ -384,5 +399,5 @@ window.__setNight = (on) => { isNight=on; $('daynight').textContent=on?'☾ nigh
   signMats.forEach(m=>m.emissiveIntensity=dn.emis); scene.fog.density=dn.fog; scene.fog.color.copy(dn.fogC);
   lampArcade.intensity=dn.lamp; lampPlaza.intensity=dn.lamp*0.8;
   plazaMat.roughness=1.0-dn.wet*0.45; plazaMat.envMapIntensity=0.22+dn.wet*0.6;
-  applyEnv(); if (LOW) renderer.render(scene,camera); else composer.render(); };
+  applyEnv(); render(); };
 console.log('[sang-town] booted (reworked: deglaze + wet-stone + smooth move + talking npcs)');
