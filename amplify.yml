@@ -3,8 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        # npm install (not ci): the Windows-generated lockfile omits Rolldown's
-        # linux-x64 native binary; install re-resolves it for the build platform.
+        # The Windows-generated package-lock omits Rolldown's linux-x64 native
+        # binary (npm optional-deps bug #4828). Drop the lockfile so npm
+        # re-resolves the correct platform binary on the Linux build host.
+        - rm -f package-lock.json
         - npm install --no-audit --no-fund
     build:
       commands:
