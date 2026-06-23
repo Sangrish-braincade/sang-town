@@ -3,7 +3,9 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        # npm install (not ci): the Windows-generated lockfile omits Rolldown's
+        # linux-x64 native binary; install re-resolves it for the build platform.
+        - npm install --no-audit --no-fund
     build:
       commands:
         - npm run build
