@@ -66,10 +66,11 @@ if (isTouch) document.body.classList.add('touch');
 $('quest')?.style && ($('quest').style.display = 'none'); // killed the section-mirroring quest list
 
 // ---------- renderer / scene / camera ----------
-const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance', preserveDrawingBuffer:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+const LOW = isTouch; // low-end / mobile: skip bloom + shadows, lower DPR
+const renderer = new THREE.WebGLRenderer({ antialias:!LOW, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !LOW;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.AgXToneMapping;   // filmic, no glaze
 renderer.toneMappingExposure = 0.95;
@@ -93,8 +94,8 @@ composer.addPass(new OutputPass());
 const hemi = new THREE.HemisphereLight(0xffffff, 0x6a705e, 0.7);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2d8, 2.6);
-sun.position.set(38, 56, 22); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.position.set(38, 56, 22); sun.castShadow = !LOW;
+sun.shadow.mapSize.set(1024, 1024);
 const sc = sun.shadow.camera; sc.left=-70; sc.right=70; sc.top=70; sc.bottom=-70; sc.near=1; sc.far=200;
 sun.shadow.bias = -0.0004; scene.add(sun);
 // brand point-lights — vermillion = "this is sang's"; off by day, on at night
@@ -145,11 +146,10 @@ const stoneRough  = texLoader.load(TEX('Roughness'));
 const stoneAO     = texLoader.load(TEX('AmbientOcclusion'));
 stoneAlbedo.colorSpace = THREE.SRGBColorSpace;
 [stoneAlbedo, stoneNormal, stoneRough, stoneAO].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(14,14); t.anisotropy = 8; });
-const plazaMat = new THREE.MeshPhysicalMaterial({
+const plazaMat = new THREE.MeshStandardMaterial({
   map:stoneAlbedo, normalMap:stoneNormal, roughnessMap:stoneRough, aoMap:stoneAO,
   roughness:1.0, metalness:0.0, envMapIntensity:0.22,
-  clearcoat:0.0, clearcoatRoughness:0.35, clearcoatNormalMap:stoneNormal,
-});
+}); // wetness faked via roughness+envMap (cheaper than clearcoat over a full-screen floor)
 const plaza = new THREE.Mesh(new THREE.CircleGeometry(26, 96), plazaMat);
 plaza.rotation.x = -Math.PI/2; plaza.position.y = 0.012; plaza.receiveShadow = true;
 plaza.geometry.setAttribute('uv2', plaza.geometry.attributes.uv); // aoMap needs uv2
@@ -203,7 +203,7 @@ const CHAR_H = 1.7;
 function loadCharacter(file, cb){
   gltfLoader.load(CHAR(file), (g) => {
     const o = g.scene; const h = (bboxOf(o).max.y - bboxOf(o).min.y) || 1; o.scale.setScalar(CHAR_H/h);
-    o.traverse(n => { if (n.isMesh){ n.castShadow = true; n.frustumCulled = false; } });
+    o.traverse(n => { if (n.isMesh){ n.castShadow = !LOW; } }); // keep frustum culling on (perf)
     cb(o, g.animations);
   });
 }
@@ -223,7 +223,7 @@ const npcs = [];
 const NPC_FILES = ['character-female-a','character-female-b','character-female-c','character-male-b','character-male-c','character-female-d'];
 NPC_FILES.forEach((file, vi) => {
   loadCharacter(file, (o, clips) => {
-    for (let k=0; k<2; k++){
+    for (let k=0; k<(LOW?1:2); k++){
       const idx = vi*2 + k; if (idx >= NPC_LINES.length) break;
       const c = cloneSkinned(o);
       const ang = (idx/NPC_LINES.length)*Math.PI*2, rad = 13 + (idx%3)*6;
@@ -366,14 +366,15 @@ function update(dt){
   dn.fog+=(dnT.fog-dn.fog)*k; scene.fog.density=dn.fog; dn.fogC.lerp(dnT.fogC,k); scene.fog.color.copy(dn.fogC);
   dn.lamp+=(dnT.lamp-dn.lamp)*k; lampArcade.intensity=dn.lamp; lampPlaza.intensity=dn.lamp*0.8;
   dn.wet+=(dnT.wet-dn.wet)*k;
-  plazaMat.clearcoat = dn.wet*0.8; plazaMat.roughness = 1.0 - dn.wet*0.4; plazaMat.envMapIntensity = 0.22 + dn.wet*0.5;
-  if (dn.wet>0.01){ plazaMat.clearcoatNormalMap.offset.x=(t*0.004)%1; plazaMat.clearcoatNormalMap.offset.y=(t*0.002)%1; }
+  plazaMat.roughness = 1.0 - dn.wet*0.45; plazaMat.envMapIntensity = 0.22 + dn.wet*0.6;
 }
 
-function animate(){ requestAnimationFrame(animate); if (window.__freeze) return; const dt=Math.min(clock.getDelta(),0.05); update(dt); composer.render(); }
+function animate(){ requestAnimationFrame(animate); if (window.__freeze) return; resize(); const dt=Math.min(clock.getDelta(),0.05); update(dt); if (LOW) renderer.render(scene, camera); else composer.render(); }
 window.__kick = animate; animate();
 
-addEventListener('resize', () => { camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight); });
+var curW, curH;
+function resize(){ const w=innerWidth||document.documentElement.clientWidth||1280, h=innerHeight||document.documentElement.clientHeight||720; if(w===curW&&h===curH) return; curW=w; curH=h; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h); composer.setSize(w,h); }
+addEventListener('resize', resize); addEventListener('load', resize); resize();
 
 // dev hooks
 window.__dbg = { scene, camera, renderer, get player(){return player;}, get npcs(){return npcs;}, get night(){return isNight;} };
@@ -382,6 +383,6 @@ window.__setNight = (on) => { isNight=on; $('daynight').textContent=on?'☾ nigh
   sun.intensity=dn.sun; hemi.intensity=dn.hemi; renderer.toneMappingExposure=dn.expo; bloom.strength=dn.bloom;
   signMats.forEach(m=>m.emissiveIntensity=dn.emis); scene.fog.density=dn.fog; scene.fog.color.copy(dn.fogC);
   lampArcade.intensity=dn.lamp; lampPlaza.intensity=dn.lamp*0.8;
-  plazaMat.clearcoat=dn.wet*0.8; plazaMat.roughness=1.0-dn.wet*0.4; plazaMat.envMapIntensity=0.22+dn.wet*0.5;
-  applyEnv(); composer.render(); };
+  plazaMat.roughness=1.0-dn.wet*0.45; plazaMat.envMapIntensity=0.22+dn.wet*0.6;
+  applyEnv(); if (LOW) renderer.render(scene,camera); else composer.render(); };
 console.log('[sang-town] booted (reworked: deglaze + wet-stone + smooth move + talking npcs)');
